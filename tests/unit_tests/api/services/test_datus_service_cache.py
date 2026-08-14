@@ -262,6 +262,46 @@ class TestFingerprintEviction:
         old.shutdown.assert_awaited_once()
         new.shutdown.assert_not_awaited()
 
+    @pytest.mark.parametrize("next_fingerprint", ["fp-a", None])
+    async def test_inflight_explicit_eviction_survives_until_delayed_next_request(self, next_fingerprint):
+        """Eviction during construction forces a rebuild even without fingerprint drift."""
+        cache = DatusServiceCache()
+        started = asyncio.Event()
+        release = asyncio.Event()
+        evicted = _mock_service("p", fingerprint="fp-a")
+        replacement = _mock_service("p", fingerprint="fp-a")
+
+        async def delayed_factory():
+            started.set()
+            await release.wait()
+            return evicted
+
+        first_request = asyncio.create_task(
+            cache.get_or_create("p", delayed_factory, expected_fingerprint="fp-a")
+        )
+        await started.wait()
+        await cache.evict("p")
+        release.set()
+        assert await first_request is evicted
+
+        # No replacement request existed when eviction happened. The stale
+        # generation may finish, but its pending marker must survive insertion.
+        assert cache._cache["p"] is evicted
+        assert "p" in cache._pending_evictions
+
+        factory = AsyncMock(return_value=replacement)
+        result = await cache.get_or_create(
+            "p",
+            factory,
+            expected_fingerprint=next_fingerprint,
+        )
+
+        assert result is replacement
+        assert cache._cache["p"] is replacement
+        assert "p" not in cache._pending_evictions
+        factory.assert_awaited_once()
+        evicted.shutdown.assert_awaited_once()
+
 
 @pytest.mark.asyncio
 class TestEvict:

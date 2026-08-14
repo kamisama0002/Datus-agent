@@ -202,7 +202,8 @@ class DatusServiceCache:
         applies the pending eviction and rebuilds the service.
         """
         async with self._lock:
-            if project_id in self._futures:
+            has_inflight_factory = project_id in self._futures
+            if has_inflight_factory:
                 self._pending_evictions.add(project_id)
             svc = self._cache.get(project_id)
             if svc is not None and svc.has_active_tasks():
@@ -211,7 +212,8 @@ class DatusServiceCache:
                 logger.info(f"Deferring DatusService eviction for project {project_id}: tasks are still active")
                 return
             svc = self._cache.pop(project_id, None)
-            self._pending_evictions.discard(project_id)
+            if not has_inflight_factory:
+                self._pending_evictions.discard(project_id)
         if not svc:
             return
         await self._dispose(project_id, svc)
