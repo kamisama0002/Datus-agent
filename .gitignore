@@ -73,3 +73,6 @@ build/
 /build_scripts/cache/
 # Local `pip install --target` output / plugin build artifacts at the repo root.
 /plugins/
+
+# Local isolated implementation worktrees
+/.worktrees/
