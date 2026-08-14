@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
@@ -15,12 +16,14 @@ _TOP_LEVEL_FIELDS = {
     "project_id",
     "agent_id",
     "datasource",
+    "model",
     "config_mutable",
     "bash",
     "query_limits",
     "config_fingerprint",
 }
 _DATASOURCE_FIELDS = {"id", "type", "host", "port", "username", "password", "database"}
+_MODEL_FIELDS = {"type", "model", "api_key", "base_url"}
 _QUERY_LIMITS = {
     "allowed_statement_types": ("select", "cte", "explain"),
     "timeout_seconds": 60,
@@ -29,6 +32,16 @@ _QUERY_LIMITS = {
 }
 _PROJECT_ID_PATTERN = re.compile(r"^nzp_[0-9a-f]{32}$")
 _FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class NanziModelDTO:
+    """Exact model object accepted in NanZi's v1 callback response."""
+
+    type: str
+    model: str
+    api_key: str = field(repr=False)
+    base_url: str
 
 
 class NanziConfigError(DatusException):
@@ -47,6 +60,7 @@ class NanziConfigBuilder:
     def build_agent_config(self, raw: Mapping[str, Any]) -> AgentConfig:
         normalized = self._validate(raw)
         datasource = normalized["datasource"]
+        model: NanziModelDTO = normalized["model"]
         datasource_name = f"nanzi_{datasource['id']}"
         agent_raw = {
             "home": self._home,
@@ -54,6 +68,23 @@ class NanziConfigBuilder:
             "skip_init_dirs": True,
             "config_mutable": False,
             "bash": {"enabled": False},
+            "target": "nanzi",
+            "models": {
+                "nanzi": {
+                    "type": model.type,
+                    "model": model.model,
+                    "api_key": model.api_key,
+                    "base_url": model.base_url,
+                }
+            },
+            "sql_policy": {
+                "enabled": True,
+                "provider": "nanzi_datus_bridge.query_policy:NanziReadOnlySqlPolicy",
+                "allowed_statement_types": list(_QUERY_LIMITS["allowed_statement_types"]),
+                "timeout_seconds": _QUERY_LIMITS["timeout_seconds"],
+                "max_rows": _QUERY_LIMITS["max_rows"],
+                "max_result_bytes": _QUERY_LIMITS["max_result_bytes"],
+            },
             "services": {
                 "datasources": {
                     datasource_name: {
@@ -71,9 +102,8 @@ class NanziConfigBuilder:
         }
         config = AgentConfig(nodes={}, **agent_raw)
         config.current_datasource = datasource_name
-        # Sidecar policy metadata is immutable. Datus's native DB read path
-        # performs its own read-only validation; consumers can apply the
-        # remaining timeout/result caps without serializing this config.
+        # Sidecar policy metadata is immutable and remains available to callers
+        # that need to report the effective NanZi contract.
         config.nanzi_query_limits = MappingProxyType(dict(_QUERY_LIMITS))
         config.nanzi_config_fingerprint = normalized["config_fingerprint"]
         config.nanzi_project_id = normalized["project_id"]
@@ -113,6 +143,19 @@ class NanziConfigBuilder:
         if datasource["type"] != "mysql" or not valid_strings or not valid_id or not valid_port:
             raise NanziConfigError()
         normalized["datasource"] = datasource
+
+        model = normalized["model"]
+        if not isinstance(model, Mapping) or set(model) != _MODEL_FIELDS:
+            raise NanziConfigError()
+        model = dict(model)
+        if not all(isinstance(model[field], str) and bool(model[field].strip()) for field in _MODEL_FIELDS):
+            raise NanziConfigError()
+        normalized["model"] = NanziModelDTO(
+            type=model["type"],
+            model=model["model"],
+            api_key=model["api_key"],
+            base_url=model["base_url"],
+        )
         return normalized
 
     @staticmethod

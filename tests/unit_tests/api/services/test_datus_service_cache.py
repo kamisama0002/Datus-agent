@@ -248,18 +248,16 @@ class TestEvict:
         await cache.evict("ghost")
         assert cache._cache == {}
 
-    async def test_evict_with_active_tasks_defers_shutdown(self):
-        """Evict service with active tasks schedules deferred shutdown."""
+    async def test_evict_with_active_tasks_preserves_routing_until_drain(self):
+        """Config eviction cannot orphan an active task's interaction broker."""
         cache = DatusServiceCache()
         svc = _mock_service("defer-proj", has_active=True)
         await cache.get_or_create("defer-proj", AsyncMock(return_value=svc))
 
         await cache.evict("defer-proj")
-        assert "defer-proj" not in cache._cache
-        # Deferred shutdown task was created — give it a moment
-        await asyncio.sleep(0.1)
-        # task_manager.wait_all_tasks should have been called
-        svc.task_manager.wait_all_tasks.assert_awaited()
+        assert cache._cache["defer-proj"] is svc
+        svc.task_manager.wait_all_tasks.assert_not_awaited()
+        svc.shutdown.assert_not_awaited()
 
 
 @pytest.mark.asyncio

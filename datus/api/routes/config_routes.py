@@ -8,7 +8,7 @@ and supported provider/database type listings.
 import asyncio
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from datus.api import deps
@@ -23,6 +23,16 @@ from datus.utils.loggings import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["configuration"])
+
+
+def _require_mutable_config(ctx: Any) -> None:
+    """Reject writes for dynamic immutable project contexts before persistence."""
+    config = getattr(ctx, "config", None)
+    if config is not None and getattr(config, "config_mutable", True) is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Project configuration is immutable",
+        )
 
 
 class UpdateDatasourcesRequest(BaseModel):
@@ -159,6 +169,7 @@ async def update_datasources_endpoint(
     ctx: AppContextDep,
 ) -> Result[dict]:
     """Full-replace `services.datasources` with the provided datasources."""
+    _require_mutable_config(ctx)
     _validate_keys(body.datasources, kind="datasource")
 
     cm = configuration_manager()
@@ -183,6 +194,7 @@ async def update_models_endpoint(
     ctx: AppContextDep,
 ) -> Result[dict]:
     """Optional full-replace `models`, optional update `target`. One must be set."""
+    _require_mutable_config(ctx)
     if body.models is None and body.target is None:
         raise DatusException(
             ErrorCode.COMMON_FIELD_INVALID,

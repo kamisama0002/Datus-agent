@@ -79,7 +79,7 @@ class NanziAuthProvider:
         cache_ttl_seconds: float = _MAX_CACHE_TTL_SECONDS,
         max_cache_entries: int = _DEFAULT_CACHE_ENTRIES,
         home: str = "~/.datus-nanzi",
-        http_client: httpx.AsyncClient | None = None,
+        http_transport: httpx.AsyncBaseTransport | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         resolved_url = self._resolve_setting(callback_url, "NANZI_CALLBACK_URL")
@@ -104,7 +104,7 @@ class NanziAuthProvider:
             base_url=resolved_url,
             service_token=resolved_token,
             protocol=protocol,
-            http_client=http_client,
+            http_transport=http_transport,
         )
         self._builder = NanziConfigBuilder(home=home)
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()

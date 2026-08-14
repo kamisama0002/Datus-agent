@@ -25,13 +25,13 @@ class NanziClient:
         service_token: str,
         protocol: str = NANZI_DATUS_PROTOCOL,
         timeout_seconds: float = 3.0,
-        http_client: httpx.AsyncClient | None = None,
+        http_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._service_token = service_token
         self._protocol = protocol
         self._timeout = httpx.Timeout(timeout_seconds)
-        self._http_client = http_client
+        self._http_transport = http_transport
 
     async def fetch_project_config(
         self,
@@ -53,17 +53,13 @@ class NanziClient:
             "X-Nanzi-Datasource-Id": datasource_id,
         }
         try:
-            if self._http_client is not None:
-                response = await self._http_client.get(
-                    f"{self._base_url}{path}", headers=headers, timeout=self._timeout
-                )
-            else:
-                async with httpx.AsyncClient(
-                    timeout=self._timeout,
-                    follow_redirects=False,
-                    trust_env=False,
-                ) as client:
-                    response = await client.get(f"{self._base_url}{path}", headers=headers)
+            async with httpx.AsyncClient(
+                timeout=self._timeout,
+                follow_redirects=False,
+                trust_env=False,
+                transport=self._http_transport,
+            ) as client:
+                response = await client.get(f"{self._base_url}{path}", headers=headers)
         except httpx.HTTPError:
             raise NanziCallbackError(_CALLBACK_ERROR) from None
 

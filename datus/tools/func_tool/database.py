@@ -1599,7 +1599,94 @@ class DBFuncTool:
             validation_error, _ = self._validate_read_sql(enforced_sql, connector)
             if validation_error:
                 return ExecuteSQLResult(success=False, error=validation_error.error, sql_query=enforced_sql)
-        return connector.execute_query(enforced_sql, result_format=result_format)
+        result = connector.execute_query(enforced_sql, result_format=result_format)
+        return self._apply_configured_result_limits(result, sql_query=enforced_sql)
+
+    def _apply_configured_result_limits(
+        self,
+        result: ExecuteSQLResult,
+        *,
+        sql_query: str,
+    ) -> ExecuteSQLResult:
+        """Bound connector output using optional native SQL-policy limits.
+
+        Rows are primarily limited by the pre-execution policy rewrite. This
+        final boundary handles nonconforming connectors and byte limits that
+        cannot be known until the native connector materializes its result.
+        """
+        agent_config = getattr(self, "agent_config", None)
+        policy = getattr(agent_config, "sql_policy_config", None)
+        if policy is None or not policy.enabled or not result.success:
+            return result
+        max_rows = policy.raw.get("max_rows")
+        max_bytes = policy.raw.get("max_result_bytes")
+        if type(max_rows) is not int or max_rows <= 0 or type(max_bytes) is not int or max_bytes <= 0:
+            return ExecuteSQLResult(
+                success=False,
+                error="Query result policy is incompatible",
+                sql_query=sql_query,
+                row_count=0,
+                sql_return=None,
+                result_format=result.result_format,
+            )
+
+        payload = result.sql_return
+        bounded_payload = payload
+        if isinstance(payload, list):
+            bounded_payload = payload[:max_rows]
+        elif isinstance(payload, tuple):
+            bounded_payload = payload[:max_rows]
+        elif result.row_count is not None and result.row_count > max_rows:
+            slice_method = getattr(payload, "slice", None)
+            if callable(slice_method):
+                bounded_payload = slice_method(0, max_rows)
+            elif hasattr(payload, "iloc"):
+                bounded_payload = payload.iloc[:max_rows]
+            else:
+                return ExecuteSQLResult(
+                    success=False,
+                    error="Query result exceeded configured row limit",
+                    sql_query=sql_query,
+                    row_count=0,
+                    sql_return=None,
+                    result_format=result.result_format,
+                )
+
+        try:
+            if isinstance(bounded_payload, bytes):
+                result_bytes = len(bounded_payload)
+            elif isinstance(bounded_payload, str):
+                result_bytes = len(bounded_payload.encode("utf-8"))
+            elif isinstance(getattr(bounded_payload, "nbytes", None), int):
+                result_bytes = bounded_payload.nbytes
+            else:
+                encoded = json.dumps(
+                    bounded_payload,
+                    ensure_ascii=True,
+                    default=str,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                result_bytes = len(encoded)
+        except (TypeError, ValueError, OverflowError):
+            result_bytes = max_bytes + 1
+        if result_bytes > max_bytes:
+            return ExecuteSQLResult(
+                success=False,
+                error="Query result exceeded configured byte limit",
+                sql_query=sql_query,
+                row_count=0,
+                sql_return=None,
+                result_format=result.result_format,
+            )
+
+        if bounded_payload is payload:
+            return result
+        return result.model_copy(
+            update={
+                "sql_return": bounded_payload,
+                "row_count": min(result.row_count or len(bounded_payload), max_rows),
+            }
+        )
 
     def guard_estimated_rows(
         self,

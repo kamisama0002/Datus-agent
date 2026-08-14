@@ -68,6 +68,12 @@ def project_config(
             "password": password,
             "database": "sales",
         },
+        "model": {
+            "type": "openai",
+            "model": "gpt-4.1-mini",
+            "api_key": "test-model-api-key",
+            "base_url": "https://models.internal/v1",
+        },
         "config_mutable": False,
         "bash": {"enabled": False},
         "query_limits": {

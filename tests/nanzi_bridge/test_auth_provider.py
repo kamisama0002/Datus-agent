@@ -13,12 +13,12 @@ from nanzi_datus_bridge.auth_provider import (
 from tests.nanzi_bridge.conftest import PROTOCOL, SERVICE_TOKEN, project_config, project_id, request_for
 
 
-def _provider(http_client: httpx.AsyncClient, **kwargs) -> NanziAuthProvider:
+def _provider(http_transport: httpx.AsyncBaseTransport, **kwargs) -> NanziAuthProvider:
     return NanziAuthProvider(
         callback_url="http://nanzi.local",
         service_token=SERVICE_TOKEN,
         protocol=PROTOCOL,
-        http_client=http_client,
+        http_transport=http_transport,
         **kwargs,
     )
 
@@ -42,9 +42,8 @@ async def test_rejects_untrusted_or_inconsistent_requests_before_callback(incomi
         callback_calls += 1
         return httpx.Response(200, json=project_config())
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        with pytest.raises(NanziAuthenticationError):
-            await _provider(http_client).authenticate(incoming_request)
+    with pytest.raises(NanziAuthenticationError):
+        await _provider(httpx.MockTransport(handler)).authenticate(incoming_request)
 
     assert callback_calls == 0
 
@@ -54,8 +53,7 @@ async def test_returns_stable_native_app_context() -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=project_config())
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        context = await _provider(http_client).authenticate(request_for())
+    context = await _provider(httpx.MockTransport(handler)).authenticate(request_for())
 
     assert context.user_id == "user-23"
     assert context.project_id == project_id()
@@ -88,13 +86,12 @@ async def test_reuses_unexpired_fingerprint_and_evicts_once_after_change() -> No
     async def on_evict(value: str) -> None:
         evicted.append(value)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        provider = _provider(http_client, clock=lambda: now[0])
-        provider.on_evict(on_evict)
-        first = await provider.authenticate(request_for())
-        second = await provider.authenticate(request_for())
-        now[0] += 31.0
-        third = await provider.authenticate(request_for())
+    provider = _provider(httpx.MockTransport(handler), clock=lambda: now[0])
+    provider.on_evict(on_evict)
+    first = await provider.authenticate(request_for())
+    second = await provider.authenticate(request_for())
+    now[0] += 31.0
+    third = await provider.authenticate(request_for())
 
     assert first.config is second.config
     assert third.config is not first.config
@@ -114,12 +111,11 @@ async def test_same_fingerprint_with_different_payload_fails_closed() -> None:
         callback_calls += 1
         return httpx.Response(200, json=body)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        provider = _provider(http_client, clock=lambda: now[0])
+    provider = _provider(httpx.MockTransport(handler), clock=lambda: now[0])
+    await provider.authenticate(request_for())
+    now[0] += 31.0
+    with pytest.raises(NanziConfigurationError, match="incompatible") as exc_info:
         await provider.authenticate(request_for())
-        now[0] += 31.0
-        with pytest.raises(NanziConfigurationError, match="incompatible") as exc_info:
-            await provider.authenticate(request_for())
 
     assert "changed-without-new-fingerprint" not in str(exc_info.value)
 
@@ -141,10 +137,9 @@ async def test_project_config_cache_is_bounded() -> None:
             ),
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        provider = _provider(http_client, max_cache_entries=2)
-        for number in (1, 2, 3, 1):
-            await provider.authenticate(request_for(agent_id=f"agent-{number}", datasource_id=str(number)))
+    provider = _provider(httpx.MockTransport(handler), max_cache_entries=2)
+    for number in (1, 2, 3, 1):
+        await provider.authenticate(request_for(agent_id=f"agent-{number}", datasource_id=str(number)))
 
     assert calls[project_id("agent-1", "1")] == 2
     assert sum(calls.values()) == 4

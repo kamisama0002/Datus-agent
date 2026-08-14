@@ -21,6 +21,7 @@ class DatusServiceCache:
         self._max_size = max_size
         self._cache: collections.OrderedDict[str, DatusService] = collections.OrderedDict()
         self._futures: dict[str, asyncio.Future[DatusService]] = {}
+        self._pending_evictions: set[str] = set()
         self._lock = asyncio.Lock()
         self._pending_tasks: set[asyncio.Task] = set()
 
@@ -49,26 +50,30 @@ class DatusServiceCache:
             # Fast path: cache hit
             if project_id in self._cache:
                 cached = self._cache[project_id]
-                if expected_fingerprint is None or cached.config_fingerprint == expected_fingerprint:
+                if project_id in self._pending_evictions:
+                    if cached.has_active_tasks():
+                        self._cache.move_to_end(project_id)
+                        return cached
+                    stale_svc = self._cache.pop(project_id)
+                    self._pending_evictions.discard(project_id)
+                    logger.info(f"Applying deferred DatusService eviction for project {project_id}")
+                elif expected_fingerprint is None or cached.config_fingerprint == expected_fingerprint:
                     self._cache.move_to_end(project_id)
                     return cached
-                # Fingerprint mismatch. Rebuilding now would orphan any in-flight
-                # chat task: its interaction broker lives in this instance's
-                # task_manager, so a later /chat/user_interaction answer would
-                # hit a fresh, empty manager and fail with "No active task found
-                # for this session". Defer the config swap while the instance is
-                # busy — keep serving it until its tasks drain, after which the
-                # next request rebuilds with the new config.
-                if cached.has_active_tasks():
+                elif cached.has_active_tasks():
+                    # A fingerprint swap would orphan the active task's
+                    # interaction broker. Keep routing to the current instance.
                     self._cache.move_to_end(project_id)
                     logger.info(
                         f"Deferring DatusService rebuild for project {project_id}: "
                         f"AgentConfig fingerprint changed but tasks are still active"
                     )
                     return cached
-                # Idle instance — safe to evict and rebuild with the new config.
-                stale_svc = self._cache.pop(project_id)
-                logger.info(f"Evicting DatusService for project {project_id} due to AgentConfig fingerprint mismatch")
+                else:
+                    stale_svc = self._cache.pop(project_id)
+                    logger.info(
+                        f"Evicting DatusService for project {project_id} due to AgentConfig fingerprint mismatch"
+                    )
 
             # Another coroutine is already creating this entry — share its future
             if project_id in self._futures:
@@ -98,6 +103,7 @@ class DatusServiceCache:
 
         async with self._lock:
             self._cache[project_id] = svc
+            self._pending_evictions.discard(project_id)
             self._cache.move_to_end(project_id)
             self._futures.pop(project_id, None)
 
@@ -115,6 +121,7 @@ class DatusServiceCache:
                 if candidate_pid is None:
                     break  # all entries have active tasks — allow cache to exceed max_size
                 old_svc = self._cache.pop(candidate_pid)
+                self._pending_evictions.discard(candidate_pid)
                 evicted.append((candidate_pid, old_svc))
 
         # Resolve the future so waiters get the result
@@ -131,11 +138,18 @@ class DatusServiceCache:
     async def evict(self, project_id: str) -> None:
         """Evict a DatusService from cache (config change).
 
-        Always removes from cache so new requests get fresh config.
-        If the service has active tasks, defers shutdown until tasks drain.
+        Active services remain routable until tasks drain. The next request
+        applies the pending eviction and rebuilds the service.
         """
         async with self._lock:
+            svc = self._cache.get(project_id)
+            if svc is not None and svc.has_active_tasks():
+                self._pending_evictions.add(project_id)
+                self._cache.move_to_end(project_id)
+                logger.info(f"Deferring DatusService eviction for project {project_id}: tasks are still active")
+                return
             svc = self._cache.pop(project_id, None)
+            self._pending_evictions.discard(project_id)
         if not svc:
             return
         await self._dispose(project_id, svc)

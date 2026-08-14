@@ -21,6 +21,12 @@ def test_builds_native_agent_config_in_memory_with_hardened_policy(tmp_path) -> 
     assert datasource.password == "database-password"
     assert datasource.database == "sales"
     assert datasource.extra["timeout_seconds"] == 60
+    active_model = config.active_model()
+    assert config.target == "nanzi"
+    assert active_model.type == "openai"
+    assert active_model.model == "gpt-4.1-mini"
+    assert active_model.api_key == "test-model-api-key"
+    assert active_model.base_url == "https://models.internal/v1"
     assert config.config_mutable is False
     assert config.bash_tool_enabled is False
     assert config.nanzi_query_limits == MappingProxyType(
@@ -42,6 +48,7 @@ def test_builds_native_agent_config_in_memory_with_hardened_policy(tmp_path) -> 
         ({"bash": {"enabled": True}}, "incompatible"),
         ({"query_limits": {"timeout_seconds": 61}}, "incompatible"),
         ({"config_fingerprint": "not-a-fingerprint"}, "incompatible"),
+        ({"model": {"type": "openai", "model": "gpt-4.1-mini"}}, "incompatible"),
         ({"unexpected": "field"}, "incompatible"),
     ],
 )
