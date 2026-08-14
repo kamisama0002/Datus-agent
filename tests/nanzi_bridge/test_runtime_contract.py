@@ -41,14 +41,18 @@ def test_runtime_skeleton_contract() -> None:
     environment = _read(".env.nanzi.example")
     setup_script = _read("scripts/setup-nanzi-integration.ps1")
     start_script = _read("scripts/start-nanzi-integration.ps1")
+    check_script = _read("scripts/check-nanzi-integration.ps1")
+    runbook = _read("docs/integration/nanzi.md")
 
     assert re.search(r"^agent:\s*$", config, re.MULTILINE)
     assert re.search(r"^  config_mutable: false\s*$", config, re.MULTILINE)
     assert re.search(r"^  bash:\s*\n    enabled: false\s*$", config, re.MULTILINE)
     assert "class: nanzi_datus_bridge.auth_provider.NanziAuthProvider" in config
     assignments = [line for line in environment.splitlines() if line and not line.startswith("#")]
-    assert assignments
-    assert all(re.fullmatch(r"NANZI_[A-Z0-9_]+=(?:|\$\{[A-Z0-9_]+\})", line) for line in assignments)
+    assert assignments == [
+        "NANZI_CALLBACK_URL=http://127.0.0.1:8000",
+        "NANZI_DATUS_INTERNAL_TOKEN=",
+    ]
     assert "${NANZI_CALLBACK_URL}" in config
     assert "${NANZI_DATUS_INTERNAL_TOKEN}" in config
 
@@ -68,6 +72,14 @@ def test_runtime_skeleton_contract() -> None:
     assert start_commands == [
         "& $python -m datus.api.main --host 127.0.0.1 --port 8001 --workers 1 --config conf/agent-nanzi.example.yml"
     ]
+    assert "-m nanzi_datus_bridge.health --config conf/agent-nanzi.example.yml" in check_script
+    assert "datus.api.main" not in check_script
+    assert "uvicorn" not in check_script.lower()
+    assert "Python 3.12" in runbook
+    assert "127.0.0.1:8001" in runbook
+    assert "--workers 1" in runbook
+    assert "scripts/check-nanzi-integration.ps1" in runbook
+    assert "docker" not in runbook.lower()
 
 
 def test_yaml_dynamic_loader_resolves_environment_placeholders(tmp_path, monkeypatch) -> None:

@@ -1,0 +1,19 @@
+{
+  "protocol": "nanzi-datus/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/chat/stream",
+    "headers": {
+      "X-Nanzi-Datus-Protocol": "nanzi-datus/v1",
+      "X-Nanzi-Project-Id": "nzp_9f8e085f833cf974eb9e28402b720829",
+      "X-Nanzi-User-Id": "user-23",
+      "X-Nanzi-Agent-Id": "agent-17",
+      "X-Nanzi-Datasource-Id": "17",
+      "X-Nanzi-Trace-Id": "trace-29"
+    },
+    "json": {
+      "message": "Count completed orders",
+      "session_id": "fixture-session"
+    }
+  }
+}

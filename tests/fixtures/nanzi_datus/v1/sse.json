@@ -1,0 +1,57 @@
+{
+  "protocol": "nanzi-datus/v1",
+  "content_type": "text/event-stream",
+  "events": [
+    {
+      "id": 1,
+      "event": "session",
+      "data": {
+        "session_id": "fixture-session",
+        "llm_session_id": null
+      },
+      "timestamp": "2026-08-14T00:00:00Z"
+    },
+    {
+      "id": 2,
+      "event": "message",
+      "data": {
+        "type": "createMessage",
+        "payload": {
+          "message_id": "fixture-message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "markdown",
+              "payload": {
+                "content": "The count is available."
+              }
+            }
+          ],
+          "depth": 0,
+          "parent_action_id": null,
+          "at_context": null
+        }
+      },
+      "timestamp": "2026-08-14T00:00:01Z"
+    },
+    {
+      "id": 3,
+      "event": "end",
+      "data": {
+        "session_id": "fixture-session",
+        "llm_session_id": null,
+        "total_events": 3,
+        "action_count": 1,
+        "duration": 0.1,
+        "requests": 1,
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "session_total_tokens": 10,
+        "context_length": 128000
+      },
+      "timestamp": "2026-08-14T00:00:02Z"
+    }
+  ]
+}

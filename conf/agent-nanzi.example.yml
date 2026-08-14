@@ -1,5 +1,6 @@
-# NanZi Datus API example. Secrets are resolved from the process environment
-# and project configuration is fetched into memory from NanZi after auth.
+# NanZi Datus API example for Python 3.12, 127.0.0.1:8001, and one worker.
+# Secrets are resolved from the process environment and project configuration
+# is fetched into memory from NanZi after auth.
 agent:
   home: ~/.datus-nanzi
   skip_init_dirs: true

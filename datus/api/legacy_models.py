@@ -26,6 +26,8 @@ class HealthResponse(BaseModel):
     version: str = Field(..., description="Service version")
     database_status: Dict[str, str] = Field(..., description="Database connection status")
     llm_status: str = Field(..., description="LLM service status")
+    liveness: str = Field(default="alive", description="Process liveness status")
+    capabilities: Dict[str, object] = Field(default_factory=dict, description="Optional capability readiness details")
 
 
 class RunWorkflowRequest(BaseModel):

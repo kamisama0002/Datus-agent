@@ -296,6 +296,20 @@ class DatusAPIService:
     async def health_check(self) -> HealthResponse:
         """Perform health check on the service."""
         try:
+            from nanzi_datus_bridge.health import build_nanzi_health, is_nanzi_mode
+
+            api_config = getattr(self.agent_config, "api_config", {}) if self.agent_config else {}
+            if is_nanzi_mode(api_config):
+                bridge_health = build_nanzi_health(config_path=getattr(self.args, "config", None))
+                return HealthResponse(
+                    status="healthy",
+                    version="1.0.0",
+                    database_status={"nanzi": "not_checked"},
+                    llm_status="not_checked",
+                    liveness=bridge_health["liveness"],
+                    capabilities={"nanzi": bridge_health["nanzi"]},
+                )
+
             # Check default agent if available
             database_status = {}
             llm_status = "unknown"
