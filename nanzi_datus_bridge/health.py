@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
 import os
 from collections.abc import Mapping, Sequence
@@ -11,16 +13,12 @@ import sys
 from urllib.parse import urlsplit
 
 from nanzi_datus_bridge.nanzi_client import NANZI_DATUS_PROTOCOL
+from nanzi_datus_bridge.runtime_settings import resolve_setting, service_token_status
 
 
 _AUTH_PROVIDER = "nanzi_datus_bridge.auth_provider.NanziAuthProvider"
-_PLACEHOLDER_TOKENS = {"change-me", "changeme", "placeholder", "replace-me", "your-token"}
-_CONFIG_MARKERS = (
-    f"class: {_AUTH_PROVIDER}",
-    "callback_url: ${NANZI_CALLBACK_URL}",
-    "service_token: ${NANZI_DATUS_INTERNAL_TOKEN}",
-    f"protocol: {NANZI_DATUS_PROTOCOL}",
-)
+_CALLBACK_TEMPLATE = "${NANZI_CALLBACK_URL}"
+_TOKEN_TEMPLATE = "${NANZI_DATUS_INTERNAL_TOKEN}"
 
 
 def is_nanzi_mode(api_config: object) -> bool:
@@ -41,8 +39,8 @@ def build_nanzi_health(
     resolved_config = config_path or env.get("DATUS_CONFIG") or "conf/agent-nanzi.example.yml"
     checks = {
         "callback_url": _callback_status(env.get("NANZI_CALLBACK_URL", "")),
-        "service_token": _token_status(env.get("NANZI_DATUS_INTERNAL_TOKEN", "")),
-        "config": _config_status(Path(resolved_config)),
+        "service_token": service_token_status(env.get("NANZI_DATUS_INTERNAL_TOKEN", "")),
+        "config": _config_status(Path(resolved_config), env),
     }
     return {
         "liveness": "alive",
@@ -79,25 +77,42 @@ def _callback_status(raw_value: object) -> str:
     return "configured"
 
 
-def _token_status(raw_value: object) -> str:
-    if not isinstance(raw_value, str):
+def _config_status(config_path: Path, environment: Mapping[str, str]) -> str:
+    if not config_path.exists():
         return "missing"
-    value = raw_value.strip()
-    if not value or "${" in value:
-        return "missing"
-    if value.lower() in _PLACEHOLDER_TOKENS:
-        return "placeholder"
-    return "configured"
-
-
-def _config_status(config_path: Path) -> str:
+    if not config_path.is_file():
+        return "unreadable"
     try:
-        content = config_path.read_text(encoding="utf-8")
+        from datus.configuration.agent_config_loader import ConfigurationManager
+
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            agent = ConfigurationManager(str(config_path)).data
     except FileNotFoundError:
         return "missing"
     except (OSError, UnicodeError):
         return "unreadable"
-    return "compatible" if all(marker in content for marker in _CONFIG_MARKERS) else "incompatible"
+    except Exception:
+        return "incompatible"
+    if not isinstance(agent, Mapping):
+        return "incompatible"
+    api = agent.get("api")
+    provider = api.get("auth_provider") if isinstance(api, Mapping) else None
+    if not isinstance(provider, Mapping) or provider.get("class") != _AUTH_PROVIDER:
+        return "incompatible"
+    kwargs = provider.get("kwargs")
+    if not isinstance(kwargs, Mapping):
+        return "incompatible"
+    if (
+        kwargs.get("callback_url") != _CALLBACK_TEMPLATE
+        or kwargs.get("service_token") != _TOKEN_TEMPLATE
+        or kwargs.get("protocol") != NANZI_DATUS_PROTOCOL
+    ):
+        return "incompatible"
+    callback_url = resolve_setting(kwargs.get("callback_url"), "NANZI_CALLBACK_URL", environment)
+    service_token = resolve_setting(kwargs.get("service_token"), "NANZI_DATUS_INTERNAL_TOKEN", environment)
+    if _callback_status(callback_url) != "configured" or service_token_status(service_token) != "configured":
+        return "incompatible"
+    return "compatible"
 
 
 def main(argv: Sequence[str] | None = None) -> int:

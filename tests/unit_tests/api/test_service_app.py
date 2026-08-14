@@ -3,6 +3,9 @@
 import argparse
 from unittest.mock import patch
 
+import httpx
+import pytest
+
 from datus.api.service import DatusAPIService, create_app
 
 
@@ -41,14 +44,26 @@ class TestCreateApp:
         # FastAPI stores user middleware as Middleware objects
         assert len(app.user_middleware) >= 1
 
-    def test_create_app_registers_v1_routers(self):
-        """create_app registers API v1 route prefixes."""
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method", "path", "json_body", "params"),
+        [
+            ("POST", "/api/v1/chat/stream", {"message": "hello", "session_id": "route-test"}, None),
+            ("POST", "/api/v1/chat/resume", {"session_id": "route-test"}, None),
+            ("POST", "/api/v1/chat/stop", {"session_id": "route-test"}, None),
+            ("GET", "/api/v1/chat/history", None, {"session_id": "route-test"}),
+        ],
+    )
+    async def test_create_app_registers_v1_chat_routes_via_asgi(self, method, path, json_body, params):
+        """The documented launch app resolves each public v1 chat route."""
         args = argparse.Namespace(config="", datasource="default", output_dir="./output", log_level="INFO")
         app = create_app(args)
-        route_paths = {route.path for route in app.routes if hasattr(route, "path")}
-        # Check that at least some v1 routes are registered
-        has_api_routes = any("/api/" in p for p in route_paths)
-        assert has_api_routes
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url="http://datus.local") as client:
+            response = await client.request(method, path, json=json_body, params=params)
+            missing = await client.get("/api/v1/chat/not-a-route")
+        assert response.status_code != 404
+        assert missing.status_code == 404
 
 
 class TestDatusAPIServiceInit:

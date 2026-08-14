@@ -6,7 +6,7 @@
       "id": 1,
       "event": "session",
       "data": {
-        "session_id": "fixture-session",
+        "session_id": "nanzi-v1-session-0001",
         "llm_session_id": null
       },
       "timestamp": "2026-08-14T00:00:00Z"
@@ -17,13 +17,13 @@
       "data": {
         "type": "createMessage",
         "payload": {
-          "message_id": "fixture-message",
+          "message_id": "nanzi-v1-message-0001",
           "role": "assistant",
           "content": [
             {
-              "type": "markdown",
+              "type": "thinking",
               "payload": {
-                "content": "The count is available."
+                "content": "Checking"
               }
             }
           ],
@@ -36,13 +36,153 @@
     },
     {
       "id": 3,
+      "event": "message",
+      "data": {
+        "type": "appendMessage",
+        "payload": {
+          "message_id": "nanzi-v1-message-0001",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "payload": {
+                "content": " completed orders"
+              }
+            }
+          ],
+          "depth": 0,
+          "parent_action_id": null,
+          "at_context": null
+        }
+      },
+      "timestamp": "2026-08-14T00:00:02Z"
+    },
+    {
+      "id": 4,
+      "event": "message",
+      "data": {
+        "type": "createMessage",
+        "payload": {
+          "message_id": "nanzi-v1-answer-0001",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "code",
+              "payload": {
+                "codeType": "sql",
+                "content": "SELECT COUNT(*) AS count FROM orders WHERE status = 'completed'"
+              }
+            },
+            {
+              "type": "markdown",
+              "payload": {
+                "content": "The completed-order count is 42."
+              }
+            }
+          ],
+          "depth": 0,
+          "parent_action_id": null,
+          "at_context": null
+        }
+      },
+      "timestamp": "2026-08-14T00:00:03Z"
+    },
+    {
+      "id": 5,
+      "event": "message",
+      "data": {
+        "type": "createMessage",
+        "payload": {
+          "message_id": "nanzi-v1-tool-message-0001",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "call-tool",
+              "payload": {
+                "callToolId": "nanzi-v1-tool-0001",
+                "toolName": "execute_sql",
+                "toolParams": {
+                  "sql": "SELECT COUNT(*) AS count FROM orders WHERE status = 'completed'"
+                },
+                "proxied": true
+              }
+            }
+          ],
+          "depth": 0,
+          "parent_action_id": null,
+          "at_context": null
+        }
+      },
+      "timestamp": "2026-08-14T00:00:04Z"
+    },
+    {
+      "id": 6,
+      "event": "message",
+      "data": {
+        "type": "createMessage",
+        "payload": {
+          "message_id": "nanzi-v1-tool-message-0001",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "call-tool-result",
+              "payload": {
+                "callToolId": "nanzi-v1-tool-0001",
+                "toolName": "execute_sql",
+                "duration": 1.0,
+                "shortDesc": "Count query completed",
+                "result": {
+                  "success": 1,
+                  "result": {
+                    "row_count": 1
+                  }
+                }
+              }
+            }
+          ],
+          "depth": 0,
+          "parent_action_id": null,
+          "at_context": null
+        }
+      },
+      "timestamp": "2026-08-14T00:00:04Z"
+    },
+    {
+      "id": 7,
+      "event": "usage",
+      "data": {
+        "session_id": "nanzi-v1-session-0001",
+        "llm_session_id": null,
+        "depth": 0,
+        "parent_action_id": null,
+        "requests": 1,
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "last_call_input_tokens": 10,
+        "context_length": 128000,
+        "delta": {
+          "requests": 1,
+          "input_tokens": 10,
+          "output_tokens": 5,
+          "total_tokens": 15,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      },
+      "timestamp": "2026-08-14T00:00:06Z"
+    },
+    {
+      "id": 8,
       "event": "end",
       "data": {
-        "session_id": "fixture-session",
+        "session_id": "nanzi-v1-session-0001",
         "llm_session_id": null,
-        "total_events": 3,
-        "action_count": 1,
-        "duration": 0.1,
+        "total_events": 8,
+        "action_count": 4,
+        "duration": 0.25,
         "requests": 1,
         "input_tokens": 10,
         "output_tokens": 5,
@@ -51,7 +191,7 @@
         "session_total_tokens": 10,
         "context_length": 128000
       },
-      "timestamp": "2026-08-14T00:00:02Z"
+      "timestamp": "2026-08-14T00:00:07Z"
     }
   ]
 }

@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import hmac
 import json
-import os
 import re
 import time
 from collections import OrderedDict
@@ -22,15 +21,14 @@ from datus.api.auth.provider import EvictCallback
 from datus.utils.exceptions import DatusException, ErrorCode
 from nanzi_datus_bridge.config_builder import NanziConfigBuilder, NanziConfigError
 from nanzi_datus_bridge.nanzi_client import NANZI_DATUS_PROTOCOL, NanziCallbackError, NanziClient
+from nanzi_datus_bridge.runtime_settings import resolve_setting, service_token_status
 
 
 _MAX_CACHE_TTL_SECONDS = 30.0
 _MAX_CACHE_ENTRIES = 1024
 _DEFAULT_CACHE_ENTRIES = 128
-_ENV_PLACEHOLDER = re.compile(r"^\$\{([A-Z_][A-Z0-9_]*)\}$")
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _PROJECT_ID = re.compile(r"^nzp_[0-9a-f]{32}$")
-_PLACEHOLDER_TOKENS = {"change-me", "changeme", "placeholder", "replace-me", "your-token"}
 
 
 class NanziBridgeError(DatusException):
@@ -86,7 +84,7 @@ class NanziAuthProvider:
         resolved_token = self._resolve_setting(service_token, "NANZI_DATUS_INTERNAL_TOKEN")
         if not resolved_url:
             self._configuration_error("NanZi callback configuration is unavailable")
-        if not resolved_token or resolved_token.lower() in _PLACEHOLDER_TOKENS:
+        if service_token_status(resolved_token) != "configured":
             self._configuration_error("NanZi service authentication is unavailable")
         if protocol != NANZI_DATUS_PROTOCOL:
             self._configuration_error("NanZi-Datus protocol is incompatible")
@@ -239,18 +237,7 @@ class NanziAuthProvider:
 
     @staticmethod
     def _resolve_setting(value: str | None, environment_name: str) -> str:
-        candidate = value
-        if candidate is None:
-            candidate = os.getenv(environment_name)
-        if not isinstance(candidate, str):
-            return ""
-        candidate = candidate.strip()
-        match = _ENV_PLACEHOLDER.fullmatch(candidate)
-        if match:
-            candidate = os.getenv(match.group(1), "").strip()
-        if "${" in candidate:
-            return ""
-        return candidate
+        return resolve_setting(value, environment_name)
 
     @staticmethod
     def _authentication_error(message: str = "NanZi service authentication failed") -> Never:

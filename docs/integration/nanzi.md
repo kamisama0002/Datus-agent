@@ -26,8 +26,12 @@ Use [.env.nanzi.example](../../.env.nanzi.example) as the variable inventory. Se
 
 ```powershell
 $env:NANZI_CALLBACK_URL = "http://127.0.0.1:8000"
-$env:NANZI_DATUS_INTERNAL_TOKEN = "<shared runtime token>"
+$env:NANZI_DATUS_INTERNAL_TOKEN = [Convert]::ToHexString(
+    [Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+).ToLowerInvariant()
 ```
+
+Generate the token once and supply the same value to NanZi through its secret-management path. Angle-bracket values, `change-me`, `example-*`, and `replace-with-a-shared-secret` are rejected as placeholders.
 
 The Datus YAML template is [conf/agent-nanzi.example.yml](../../conf/agent-nanzi.example.yml). It resolves both values from the process environment and pins `nanzi-datus/v1`.
 
@@ -68,3 +72,7 @@ Stop it with `Ctrl+C`. Do not add extra workers because the authenticated projec
 `GET http://127.0.0.1:8001/health` remains a process health endpoint. In NanZi mode it returns `liveness: alive` separately from `capabilities.nanzi.ready`, exposes `capabilities.nanzi.protocol: nanzi-datus/v1`, and reports database/model probes as `not_checked`. The NanZi-mode health path performs no callback, datasource, or model request.
 
 Readiness check values are limited to `configured`, `compatible`, `missing`, `invalid`, `placeholder`, `unreadable`, and `incompatible`. Investigate the named local setting rather than logging its value.
+
+## Canonical protocol fixtures
+
+The authoritative `nanzi-datus/v1` cross-repository fixtures are under `tests/fixtures/nanzi_datus/v1/`. Copy `request.json`, `sse.json`, and `contract-manifest.json` byte-for-byte into the NanZi repository, then verify the request/SSE SHA-256 values recorded in the manifest. The deterministic bearer value is fixture-only test data, not a runtime credential.

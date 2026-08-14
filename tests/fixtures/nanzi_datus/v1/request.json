@@ -4,16 +4,26 @@
     "method": "POST",
     "path": "/api/v1/chat/stream",
     "headers": {
-      "X-Nanzi-Datus-Protocol": "nanzi-datus/v1",
-      "X-Nanzi-Project-Id": "nzp_9f8e085f833cf974eb9e28402b720829",
-      "X-Nanzi-User-Id": "user-23",
+      "Accept": "text/event-stream",
+      "Authorization": "Bearer fixture-nanzi-datus-v1-secret-6f93a2b4c8d1",
+      "Content-Type": "application/json",
       "X-Nanzi-Agent-Id": "agent-17",
       "X-Nanzi-Datasource-Id": "17",
-      "X-Nanzi-Trace-Id": "trace-29"
+      "X-Nanzi-Datus-Protocol": "nanzi-datus/v1",
+      "X-Nanzi-Project-Id": "nzp_9f8e085f833cf974eb9e28402b720829",
+      "X-Nanzi-Trace-Id": "trace-29",
+      "X-Nanzi-User-Id": "user-23"
     },
     "json": {
+      "datasource": "nanzi_17",
+      "interactive": false,
+      "max_turns": 30,
       "message": "Count completed orders",
-      "session_id": "fixture-session"
+      "origin": "orchestrator",
+      "plan_mode": false,
+      "prompt_language": "en",
+      "session_id": "nanzi-v1-session-0001",
+      "stream_response": true
     }
   }
 }

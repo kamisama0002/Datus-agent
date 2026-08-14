@@ -300,14 +300,26 @@ class DatusAPIService:
 
             api_config = getattr(self.agent_config, "api_config", {}) if self.agent_config else {}
             if is_nanzi_mode(api_config):
-                bridge_health = build_nanzi_health(config_path=getattr(self.args, "config", None))
+                health_failed = False
+                try:
+                    bridge_health = build_nanzi_health(config_path=getattr(self.args, "config", None))
+                    nanzi_capability = bridge_health["nanzi"]
+                except Exception:
+                    health_failed = True
+                    nanzi_capability = {
+                        "protocol": "nanzi-datus/v1",
+                        "ready": False,
+                        "checks": {"health": "error"},
+                    }
+                if health_failed:
+                    logger.error("NanZi health check failed")
                 return HealthResponse(
                     status="healthy",
                     version="1.0.0",
                     database_status={"nanzi": "not_checked"},
                     llm_status="not_checked",
-                    liveness=bridge_health["liveness"],
-                    capabilities={"nanzi": bridge_health["nanzi"]},
+                    liveness="alive",
+                    capabilities={"nanzi": nanzi_capability},
                 )
 
             # Check default agent if available
