@@ -75,4 +75,4 @@ Readiness check values are limited to `configured`, `compatible`, `missing`, `in
 
 ## Canonical protocol fixtures
 
-The authoritative `nanzi-datus/v1` cross-repository fixtures are under `tests/fixtures/nanzi_datus/v1/`. Copy `request.json`, `sse.json`, and `contract-manifest.json` byte-for-byte into the NanZi repository, then verify the request/SSE SHA-256 values recorded in the manifest. The deterministic bearer value is fixture-only test data, not a runtime credential.
+The authoritative `nanzi-datus/v1` cross-repository fixtures are under `tests/fixtures/nanzi_datus/v1/`. Copy `request.json`, `sse.json`, and `contract-manifest.json` byte-for-byte into the NanZi repository, then verify the request/SSE SHA-256 values recorded in the manifest. The raw bearer is a validator-rejected redacted sentinel; contract tests replace it only in memory with a strong test-only value before authentication.

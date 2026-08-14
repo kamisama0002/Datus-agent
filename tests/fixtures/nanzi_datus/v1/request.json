@@ -5,7 +5,7 @@
     "path": "/api/v1/chat/stream",
     "headers": {
       "Accept": "text/event-stream",
-      "Authorization": "Bearer fixture-nanzi-datus-v1-secret-6f93a2b4c8d1",
+      "Authorization": "Bearer <redacted-nanzi-datus-service-token>",
       "Content-Type": "application/json",
       "X-Nanzi-Agent-Id": "agent-17",
       "X-Nanzi-Datasource-Id": "17",

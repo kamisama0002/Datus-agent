@@ -2,7 +2,7 @@
   "protocol": "nanzi-datus/v1",
   "hash_algorithm": "sha256",
   "fixtures": {
-    "request.json": "17a0e7d3b9696cc1634124b29564cb539c97d776709edfc104c86dac5e4ae318",
+    "request.json": "af951db67c7c2675f65957bb09d1be7594e1df32422b75dd61b5ffbd111be7b7",
     "sse.json": "d8f388a07f46e624563212fee7c30a4ee889caeed26f7a5291a6fa1435a54029"
   }
 }

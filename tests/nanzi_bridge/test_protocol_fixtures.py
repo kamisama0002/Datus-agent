@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -12,8 +13,9 @@ import pytest
 from datus.api.models.cli_models import SSEEndData, SSEEvent, SSESessionData, StreamChatInput
 from datus.api.services.action_sse_converter import action_to_sse_event
 from datus.schemas.action_history import ActionHistory, ActionRole, ActionStatus
-from nanzi_datus_bridge.auth_provider import NanziAuthProvider
+from nanzi_datus_bridge.auth_provider import NanziAuthProvider, NanziConfigurationError
 from nanzi_datus_bridge.nanzi_client import NANZI_DATUS_PROTOCOL
+from nanzi_datus_bridge.runtime_settings import service_token_status
 from tests.nanzi_bridge.conftest import project_config, project_id
 
 
@@ -179,12 +181,21 @@ def test_contract_manifest_hashes_exact_canonical_fixture_bytes() -> None:
         assert actual_hash == expected_hash
 
 
+def test_raw_request_fixture_bearer_is_rejected_by_runtime_validation() -> None:
+    fixture = _load_fixture("request.json")
+    raw_token = fixture["request"]["headers"]["Authorization"].removeprefix("Bearer ")
+
+    assert service_token_status(raw_token) == "placeholder"
+    with pytest.raises(NanziConfigurationError):
+        NanziAuthProvider(callback_url="http://127.0.0.1:8000", service_token=raw_token)
+
+
 @pytest.mark.anyio
 async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None:
-    fixture = _load_fixture("request.json")
+    fixture = deepcopy(_load_fixture("request.json"))
     callback_requests: list[httpx.Request] = []
-    authorization = fixture["request"]["headers"]["Authorization"]
-    service_token = authorization.removeprefix("Bearer ")
+    service_token = "fixture-test-only-secret-9c8e7a6b5d4f"
+    fixture["request"]["headers"]["Authorization"] = f"Bearer {service_token}"
 
     async def callback(request: httpx.Request) -> httpx.Response:
         callback_requests.append(request)
