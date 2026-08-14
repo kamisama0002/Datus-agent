@@ -21,6 +21,10 @@ class DatusServiceCache:
         self._max_size = max_size
         self._cache: collections.OrderedDict[str, DatusService] = collections.OrderedDict()
         self._futures: dict[str, asyncio.Future[DatusService]] = {}
+        self._future_fingerprints: dict[str, Optional[str]] = {}
+        self._future_replacements: dict[
+            asyncio.Future[DatusService], asyncio.Future[DatusService]
+        ] = {}
         self._pending_evictions: set[str] = set()
         self._lock = asyncio.Lock()
         self._pending_tasks: set[asyncio.Task] = set()
@@ -77,11 +81,26 @@ class DatusServiceCache:
 
             # Another coroutine is already creating this entry — share its future
             if project_id in self._futures:
-                fut = self._futures[project_id]
+                existing_fut = self._futures[project_id]
+                inflight_fingerprint = self._future_fingerprints.get(project_id)
+                if expected_fingerprint is not None and inflight_fingerprint != expected_fingerprint:
+                    # A newer configuration must not wait on or install an
+                    # older in-flight factory. Chain old callers to the new
+                    # generation so nobody receives an orphaned service.
+                    fut = asyncio.get_running_loop().create_future()
+                    self._futures[project_id] = fut
+                    self._future_fingerprints[project_id] = expected_fingerprint
+                    self._future_replacements[existing_fut] = fut
+                    self._pending_evictions.discard(project_id)
+                    is_creator = True
+                else:
+                    fut = existing_fut
             else:
                 # We are the creator — register a future for waiters
                 fut = asyncio.get_running_loop().create_future()
                 self._futures[project_id] = fut
+                self._future_fingerprints[project_id] = expected_fingerprint
+                self._pending_evictions.discard(project_id)
                 is_creator = True
 
         if stale_svc is not None:
@@ -96,33 +115,50 @@ class DatusServiceCache:
             svc = await factory()
         except Exception as e:
             async with self._lock:
-                self._futures.pop(project_id, None)
+                replacement = self._future_replacements.get(fut)
+                if self._futures.get(project_id) is fut:
+                    self._futures.pop(project_id, None)
+                    self._future_fingerprints.pop(project_id, None)
+            if replacement is not None:
+                return await self._resolve_replacement(fut, replacement)
             if not fut.done():
                 fut.set_exception(e)
             raise
 
         async with self._lock:
-            self._cache[project_id] = svc
-            self._pending_evictions.discard(project_id)
-            self._cache.move_to_end(project_id)
-            self._futures.pop(project_id, None)
+            replacement = self._future_replacements.get(fut)
+            if self._futures.get(project_id) is fut:
+                self._cache[project_id] = svc
+                self._cache.move_to_end(project_id)
+                self._futures.pop(project_id, None)
+                self._future_fingerprints.pop(project_id, None)
 
-            # Evict oldest if over capacity, but skip services with active tasks
-            evicted = []
-            while len(self._cache) > self._max_size:
-                # Find the oldest entry without active tasks
-                candidate_pid = None
-                for pid in self._cache:
-                    if pid == project_id:
-                        continue
-                    if not self._cache[pid].has_active_tasks():
-                        candidate_pid = pid
-                        break
-                if candidate_pid is None:
-                    break  # all entries have active tasks — allow cache to exceed max_size
-                old_svc = self._cache.pop(candidate_pid)
-                self._pending_evictions.discard(candidate_pid)
-                evicted.append((candidate_pid, old_svc))
+                # Eviction can arrive while only the factory exists. Preserve
+                # that pending marker on insertion; a following request either
+                # keeps an active service routable or rebuilds it immediately.
+
+                # Evict oldest if over capacity, but skip services with active tasks
+                evicted = []
+                while len(self._cache) > self._max_size:
+                    # Find the oldest entry without active tasks
+                    candidate_pid = None
+                    for pid in self._cache:
+                        if pid == project_id:
+                            continue
+                        if not self._cache[pid].has_active_tasks():
+                            candidate_pid = pid
+                            break
+                    if candidate_pid is None:
+                        break  # all entries have active tasks — allow cache to exceed max_size
+                    old_svc = self._cache.pop(candidate_pid)
+                    self._pending_evictions.discard(candidate_pid)
+                    evicted.append((candidate_pid, old_svc))
+            else:
+                evicted = []
+
+        if replacement is not None:
+            await self._dispose(project_id, svc)
+            return await self._resolve_replacement(fut, replacement)
 
         # Resolve the future so waiters get the result
         if not fut.done():
@@ -135,6 +171,30 @@ class DatusServiceCache:
 
         return svc
 
+    async def _resolve_replacement(
+        self,
+        superseded: asyncio.Future[DatusService],
+        replacement: asyncio.Future[DatusService],
+    ) -> DatusService:
+        """Chain superseded creators and their waiters to the newest service."""
+        try:
+            service = await replacement
+        except asyncio.CancelledError:
+            if not superseded.done():
+                superseded.cancel()
+            raise
+        except BaseException as exc:
+            if not superseded.done():
+                superseded.set_exception(exc)
+            raise
+        else:
+            if not superseded.done():
+                superseded.set_result(service)
+            return service
+        finally:
+            async with self._lock:
+                self._future_replacements.pop(superseded, None)
+
     async def evict(self, project_id: str) -> None:
         """Evict a DatusService from cache (config change).
 
@@ -142,6 +202,8 @@ class DatusServiceCache:
         applies the pending eviction and rebuilds the service.
         """
         async with self._lock:
+            if project_id in self._futures:
+                self._pending_evictions.add(project_id)
             svc = self._cache.get(project_id)
             if svc is not None and svc.has_active_tasks():
                 self._pending_evictions.add(project_id)

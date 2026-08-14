@@ -1657,6 +1657,15 @@ class DBFuncTool:
                 result_bytes = len(bounded_payload)
             elif isinstance(bounded_payload, str):
                 result_bytes = len(bounded_payload.encode("utf-8"))
+            elif self._is_optional_pandas_dataframe(bounded_payload):
+                deep_bytes = int(bounded_payload.memory_usage(index=True, deep=True).sum())
+                serialized = bounded_payload.to_json(orient="records", force_ascii=True)
+                if not isinstance(serialized, str):
+                    raise TypeError("DataFrame serialization did not return text")
+                # Deep usage includes object-backed strings; records JSON adds
+                # the actual response envelope and escaping overhead. The
+                # larger figure is a conservative payload-size lower bound.
+                result_bytes = max(deep_bytes, len(serialized.encode("utf-8")))
             elif isinstance(getattr(bounded_payload, "nbytes", None), int):
                 result_bytes = bounded_payload.nbytes
             else:
@@ -1686,6 +1695,14 @@ class DBFuncTool:
                 "sql_return": bounded_payload,
                 "row_count": min(result.row_count or len(bounded_payload), max_rows),
             }
+        )
+
+    @staticmethod
+    def _is_optional_pandas_dataframe(payload: Any) -> bool:
+        """Recognize pandas DataFrame instances without importing pandas."""
+        return any(
+            base.__name__ == "DataFrame" and base.__module__.startswith("pandas.")
+            for base in type(payload).__mro__
         )
 
     def guard_estimated_rows(

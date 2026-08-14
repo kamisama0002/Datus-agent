@@ -4,6 +4,8 @@ from types import MappingProxyType
 
 import pytest
 
+from datus.models.base import LLMBaseModel
+from datus.models.openai_model import OpenAIModel
 from nanzi_datus_bridge.config_builder import NanziConfigBuilder, NanziConfigError
 from tests.nanzi_bridge.conftest import project_config
 
@@ -39,6 +41,26 @@ def test_builds_native_agent_config_in_memory_with_hardened_policy(tmp_path) -> 
     )
     assert config.nanzi_config_fingerprint == "a" * 64
     assert not home.exists()
+
+
+def test_native_model_factory_constructs_openai_model(tmp_path) -> None:
+    config = NanziConfigBuilder(home=str(tmp_path / "runtime-home")).build_agent_config(project_config())
+
+    model = LLMBaseModel.create_model(config)
+
+    assert isinstance(model, OpenAIModel)
+
+
+def test_rejects_unsupported_model_type_without_leaking_credentials() -> None:
+    body = project_config()
+    body["model"]["type"] = "anthropic"
+    body["model"]["api_key"] = "model-secret-that-must-not-leak"
+
+    with pytest.raises(NanziConfigError) as exc_info:
+        NanziConfigBuilder().build_agent_config(body)
+
+    assert "model-secret-that-must-not-leak" not in str(exc_info.value)
+    assert "anthropic" not in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

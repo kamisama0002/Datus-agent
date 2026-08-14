@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from datus.configuration.agent_config import AgentConfig
 from datus.utils.exceptions import DatusException, ErrorCode
@@ -38,10 +38,14 @@ _FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 class NanziModelDTO:
     """Exact model object accepted in NanZi's v1 callback response."""
 
-    type: str
+    type: Literal["openai"]
     model: str
     api_key: str = field(repr=False)
     base_url: str
+
+    def __post_init__(self) -> None:
+        if self.type != "openai" or not all((self.model.strip(), self.api_key.strip(), self.base_url.strip())):
+            raise NanziConfigError()
 
 
 class NanziConfigError(DatusException):
@@ -148,7 +152,9 @@ class NanziConfigBuilder:
         if not isinstance(model, Mapping) or set(model) != _MODEL_FIELDS:
             raise NanziConfigError()
         model = dict(model)
-        if not all(isinstance(model[field], str) and bool(model[field].strip()) for field in _MODEL_FIELDS):
+        if model["type"] != "openai" or not all(
+            isinstance(model[field], str) and bool(model[field].strip()) for field in _MODEL_FIELDS
+        ):
             raise NanziConfigError()
         normalized["model"] = NanziModelDTO(
             type=model["type"],

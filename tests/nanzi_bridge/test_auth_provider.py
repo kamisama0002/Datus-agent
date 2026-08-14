@@ -121,6 +121,22 @@ async def test_same_fingerprint_with_different_payload_fails_closed() -> None:
 
 
 @pytest.mark.anyio
+async def test_unsupported_callback_model_type_fails_closed_without_secret_leak() -> None:
+    body = project_config()
+    body["model"]["type"] = "anthropic"
+    body["model"]["api_key"] = "callback-model-secret-that-must-not-leak"
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    with pytest.raises(NanziConfigurationError) as exc_info:
+        await _provider(httpx.MockTransport(handler)).authenticate(request_for())
+
+    assert "callback-model-secret-that-must-not-leak" not in str(exc_info.value)
+    assert "anthropic" not in str(exc_info.value)
+
+
+@pytest.mark.anyio
 async def test_project_config_cache_is_bounded() -> None:
     calls: Counter[str] = Counter()
 

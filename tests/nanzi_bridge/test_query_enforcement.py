@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from datus.schemas.node_models import ExecuteSQLResult
 from datus.tools.db_tools.db_manager import DBManager
 from datus.tools.func_tool.database import DBFuncTool
@@ -55,6 +57,21 @@ def test_native_policy_rewrites_row_limit_and_bounds_connector_result() -> None:
 def test_native_result_hook_fails_closed_before_returning_oversized_bytes() -> None:
     oversized = [{"payload": "x" * (2 * 1024 * 1024)}]
     connector = _Connector(ExecuteSQLResult(success=True, row_count=1, sql_return=oversized, result_format="list"))
+
+    result = _tool().execute_read_enforced("SELECT payload FROM orders", connector)
+
+    assert result.success is False
+    assert result.sql_return is None
+    assert result.row_count == 0
+    assert "limit" in (result.error or "").lower()
+
+
+def test_native_result_hook_fails_closed_for_oversized_optional_pandas_dataframe() -> None:
+    pandas = pytest.importorskip("pandas")
+    dataframe = pandas.DataFrame({"payload": ["x" * (2 * 1024 * 1024)]})
+    connector = _Connector(
+        ExecuteSQLResult(success=True, row_count=1, sql_return=dataframe, result_format="dataframe")
+    )
 
     result = _tool().execute_read_enforced("SELECT payload FROM orders", connector)
 

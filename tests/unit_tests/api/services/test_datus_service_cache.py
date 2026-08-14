@@ -227,6 +227,41 @@ class TestFingerprintEviction:
         assert result is svc
         factory.assert_not_called()
 
+    async def test_inflight_mismatched_fingerprint_supersedes_factory_result(self):
+        """A config-B request cannot join or install config A's in-flight future."""
+        cache = DatusServiceCache()
+        started_a = asyncio.Event()
+        release_a = asyncio.Event()
+        started_b = asyncio.Event()
+        old = _mock_service("p", fingerprint="fp-a")
+        new = _mock_service("p", fingerprint="fp-b")
+
+        async def factory_a():
+            started_a.set()
+            await release_a.wait()
+            return old
+
+        async def factory_b():
+            started_b.set()
+            return new
+
+        request_a = asyncio.create_task(cache.get_or_create("p", factory_a, expected_fingerprint="fp-a"))
+        await started_a.wait()
+        await cache.evict("p")
+        request_b = asyncio.create_task(cache.get_or_create("p", factory_b, expected_fingerprint="fp-b"))
+        await asyncio.sleep(0)
+        release_a.set()
+
+        result_a, result_b = await asyncio.gather(request_a, request_b)
+
+        assert started_b.is_set()
+        assert result_a is new
+        assert result_b is new
+        assert cache._cache["p"] is new
+        assert cache._cache["p"].config_fingerprint == "fp-b"
+        old.shutdown.assert_awaited_once()
+        new.shutdown.assert_not_awaited()
+
 
 @pytest.mark.asyncio
 class TestEvict:
