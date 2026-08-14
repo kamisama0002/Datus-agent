@@ -106,7 +106,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["datus*"]
+include = ["datus*", "nanzi_datus_bridge*"]
 exclude = ["benchmark*", "docs*"]
 
 [tool.setuptools.package-data]

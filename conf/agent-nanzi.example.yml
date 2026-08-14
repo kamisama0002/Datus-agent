@@ -1,0 +1,11 @@
+# NanZi Datus API example. Copy and complete the normal Datus agent settings
+# required by your deployment before use. The Task 2 AuthProvider rejects every
+# request until Task 7 implements NanZi callback validation.
+agent:
+  home: ~/.datus-nanzi
+  config_mutable: false
+  bash:
+    enabled: false
+  api:
+    auth_provider:
+      class: nanzi_datus_bridge.auth_provider.NanziAuthProvider
