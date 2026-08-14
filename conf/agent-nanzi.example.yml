@@ -1,11 +1,17 @@
-# NanZi Datus API example. Copy and complete the normal Datus agent settings
-# required by your deployment before use. The Task 2 AuthProvider rejects every
-# request until Task 7 implements NanZi callback validation.
+# NanZi Datus API example. Secrets are resolved from the process environment
+# and project configuration is fetched into memory from NanZi after auth.
 agent:
   home: ~/.datus-nanzi
+  skip_init_dirs: true
   config_mutable: false
   bash:
     enabled: false
   api:
     auth_provider:
       class: nanzi_datus_bridge.auth_provider.NanziAuthProvider
+      kwargs:
+        callback_url: ${NANZI_CALLBACK_URL}
+        service_token: ${NANZI_DATUS_INTERNAL_TOKEN}
+        protocol: nanzi-datus/v1
+        cache_ttl_seconds: 30
+        max_cache_entries: 128

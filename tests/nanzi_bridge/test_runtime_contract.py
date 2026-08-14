@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import re
 from pathlib import Path
 
 import pytest
+
+from datus.api.auth.loader import load_auth_provider
+from datus.configuration.agent_config_loader import load_agent_config
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -17,12 +19,20 @@ def _read(relative_path: str) -> str:
     return (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def _assert_native_commands_fail_fast(script: str) -> None:
+def _native_commands(script: str) -> list[str]:
     lines = script.splitlines()
-    for index, line in enumerate(lines):
-        if line.lstrip().startswith("& "):
-            assert index + 1 < len(lines)
-            assert "$LASTEXITCODE -ne 0" in lines[index + 1]
+    command_indexes = [index for index, line in enumerate(lines) if re.match(r"^\s*&\s+\S", line)]
+    assert command_indexes
+    for index in command_indexes:
+        following_statements = [
+            line.strip() for line in lines[index + 1 :] if line.strip() and not line.lstrip().startswith("#")
+        ]
+        assert following_statements
+        assert re.fullmatch(
+            r"if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}",
+            following_statements[0],
+        )
+    return [lines[index].strip() for index in command_indexes]
 
 
 def test_runtime_skeleton_contract() -> None:
@@ -36,7 +46,11 @@ def test_runtime_skeleton_contract() -> None:
     assert re.search(r"^  config_mutable: false\s*$", config, re.MULTILINE)
     assert re.search(r"^  bash:\s*\n    enabled: false\s*$", config, re.MULTILINE)
     assert "class: nanzi_datus_bridge.auth_provider.NanziAuthProvider" in config
-    assert "NANZI_" not in environment or "=" in environment
+    assignments = [line for line in environment.splitlines() if line and not line.startswith("#")]
+    assert assignments
+    assert all(re.fullmatch(r"NANZI_[A-Z0-9_]+=(?:|\$\{[A-Z0-9_]+\})", line) for line in assignments)
+    assert "${NANZI_CALLBACK_URL}" in config
+    assert "${NANZI_DATUS_INTERNAL_TOKEN}" in config
 
     assert "uv venv --python 3.12 .venv" in setup_script
     assert "datus-mysql" in setup_script
@@ -45,16 +59,41 @@ def test_runtime_skeleton_contract() -> None:
     assert "--host 127.0.0.1 --port 8001 --workers 1" in start_script
     assert "docker" not in setup_script.lower()
     assert "docker" not in start_script.lower()
-    _assert_native_commands_fail_fast(setup_script)
-    _assert_native_commands_fail_fast(start_script)
+    assert "Start-Process" not in setup_script + start_script
+    setup_commands = _native_commands(setup_script)
+    start_commands = _native_commands(start_script)
+    assert len(setup_commands) == 2
+    assert setup_commands[0].startswith("& $uv venv --python 3.12 .venv")
+    assert setup_commands[1].startswith("& $uv pip install --python $python")
+    assert start_commands == [
+        "& $python -m datus.api.main --host 127.0.0.1 --port 8001 --workers 1 --config conf/agent-nanzi.example.yml"
+    ]
 
 
-def test_bridge_provider_is_importable_and_fails_closed() -> None:
-    """Task 2 must not accidentally accept traffic before Task 7 authentication."""
+def test_yaml_dynamic_loader_resolves_environment_placeholders(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("NANZI_CALLBACK_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("NANZI_DATUS_INTERNAL_TOKEN", "loader-test-token")
+    config_path = tmp_path / "agent.yml"
+    config_path.write_text(
+        """agent:
+  home: ~/.datus-nanzi
+  skip_init_dirs: true
+  config_mutable: false
+  bash:
+    enabled: false
+  api:
+    auth_provider:
+      class: nanzi_datus_bridge.auth_provider.NanziAuthProvider
+      kwargs:
+        callback_url: ${NANZI_CALLBACK_URL}
+        service_token: ${NANZI_DATUS_INTERNAL_TOKEN}
+        protocol: nanzi-datus/v1
+""",
+        encoding="utf-8",
+    )
+
+    agent_config = load_agent_config(config=str(config_path), reload=True)
+    provider = load_auth_provider(agent_config.api_config, datasource="default")
+
     provider_module = importlib.import_module("nanzi_datus_bridge.auth_provider")
-    config_module = importlib.import_module("nanzi_datus_bridge.config_builder")
-    provider = provider_module.NanziAuthProvider()
-
-    assert hasattr(config_module, "NanziConfigBuilder")
-    with pytest.raises(RuntimeError, match="Task 7"):
-        asyncio.run(provider.authenticate(object()))
+    assert isinstance(provider, provider_module.NanziAuthProvider)

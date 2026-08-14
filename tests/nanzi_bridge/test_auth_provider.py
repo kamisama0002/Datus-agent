@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+from collections import Counter
+
+import httpx
+import pytest
+
+from nanzi_datus_bridge.auth_provider import (
+    NanziAuthenticationError,
+    NanziAuthProvider,
+    NanziConfigurationError,
+)
+from tests.nanzi_bridge.conftest import PROTOCOL, SERVICE_TOKEN, project_config, project_id, request_for
+
+
+def _provider(http_client: httpx.AsyncClient, **kwargs) -> NanziAuthProvider:
+    return NanziAuthProvider(
+        callback_url="http://nanzi.local",
+        service_token=SERVICE_TOKEN,
+        protocol=PROTOCOL,
+        http_client=http_client,
+        **kwargs,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "incoming_request",
+    [
+        request_for(token="wrong-token"),
+        request_for(protocol="nanzi-datus/v2"),
+        request_for(omit={"authorization"}),
+        request_for(omit={"x-nanzi-user-id"}),
+        request_for(supplied_project_id="nzp_" + "0" * 32),
+    ],
+)
+async def test_rejects_untrusted_or_inconsistent_requests_before_callback(incoming_request) -> None:
+    callback_calls = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal callback_calls
+        callback_calls += 1
+        return httpx.Response(200, json=project_config())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        with pytest.raises(NanziAuthenticationError):
+            await _provider(http_client).authenticate(incoming_request)
+
+    assert callback_calls == 0
+
+
+@pytest.mark.anyio
+async def test_returns_stable_native_app_context() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=project_config())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        context = await _provider(http_client).authenticate(request_for())
+
+    assert context.user_id == "user-23"
+    assert context.project_id == project_id()
+    assert context.config is not None
+    assert context.config.current_datasource == "nanzi_17"
+    assert context.principal == {
+        "tenant_id": "default",
+        "agent_id": "agent-17",
+        "datasource_id": "17",
+    }
+
+
+@pytest.mark.anyio
+async def test_reuses_unexpired_fingerprint_and_evicts_once_after_change() -> None:
+    now = [100.0]
+    callback_calls = 0
+    responses = [
+        project_config(fingerprint="a" * 64),
+        project_config(fingerprint="b" * 64, password="rotated-password"),
+    ]
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal callback_calls
+        body = responses[min(callback_calls, len(responses) - 1)]
+        callback_calls += 1
+        return httpx.Response(200, json=body)
+
+    evicted: list[str] = []
+
+    async def on_evict(value: str) -> None:
+        evicted.append(value)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        provider = _provider(http_client, clock=lambda: now[0])
+        provider.on_evict(on_evict)
+        first = await provider.authenticate(request_for())
+        second = await provider.authenticate(request_for())
+        now[0] += 31.0
+        third = await provider.authenticate(request_for())
+
+    assert first.config is second.config
+    assert third.config is not first.config
+    assert callback_calls == 2
+    assert evicted == [project_id()]
+
+
+@pytest.mark.anyio
+async def test_same_fingerprint_with_different_payload_fails_closed() -> None:
+    now = [100.0]
+    responses = [project_config(), project_config(password="changed-without-new-fingerprint")]
+    callback_calls = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal callback_calls
+        body = responses[callback_calls]
+        callback_calls += 1
+        return httpx.Response(200, json=body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        provider = _provider(http_client, clock=lambda: now[0])
+        await provider.authenticate(request_for())
+        now[0] += 31.0
+        with pytest.raises(NanziConfigurationError, match="incompatible") as exc_info:
+            await provider.authenticate(request_for())
+
+    assert "changed-without-new-fingerprint" not in str(exc_info.value)
+
+
+@pytest.mark.anyio
+async def test_project_config_cache_is_bounded() -> None:
+    calls: Counter[str] = Counter()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        pid = request.url.path.split("/")[-2]
+        calls[pid] += 1
+        datasource_id = int(request.headers["X-Nanzi-Datasource-Id"])
+        return httpx.Response(
+            200,
+            json=project_config(
+                agent_id=request.headers["X-Nanzi-Agent-Id"],
+                datasource_id=datasource_id,
+                fingerprint=f"{datasource_id:x}" * 64,
+            ),
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        provider = _provider(http_client, max_cache_entries=2)
+        for number in (1, 2, 3, 1):
+            await provider.authenticate(request_for(agent_id=f"agent-{number}", datasource_id=str(number)))
+
+    assert calls[project_id("agent-1", "1")] == 2
+    assert sum(calls.values()) == 4
+
+
+@pytest.mark.parametrize("token", [None, "", "${MISSING_TOKEN}", "change-me", "placeholder"])
+def test_missing_or_placeholder_service_token_fails_closed(monkeypatch, token) -> None:
+    monkeypatch.delenv("MISSING_TOKEN", raising=False)
+    with pytest.raises(NanziConfigurationError):
+        NanziAuthProvider(callback_url="http://nanzi.local", service_token=token)
