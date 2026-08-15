@@ -147,6 +147,50 @@ class TestGetOrCreate:
         assert all(str(result) == "shared config error" for result in results)
         assert "shared-failure" not in cache._futures
 
+    async def test_cancelled_creator_cleans_generation_and_allows_retry(self):
+        cache = DatusServiceCache()
+        started = asyncio.Event()
+
+        async def cancelled_factory():
+            started.set()
+            await asyncio.Event().wait()
+
+        creator = asyncio.create_task(cache.get_or_create("cancelled", cancelled_factory))
+        await started.wait()
+        creator.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await creator
+
+        assert "cancelled" not in cache._futures
+        assert "cancelled" not in cache._future_fingerprints
+
+        replacement = _mock_service("cancelled")
+        assert await cache.get_or_create("cancelled", AsyncMock(return_value=replacement)) is replacement
+
+    async def test_cancelled_creator_releases_waiter_without_hanging(self):
+        cache = DatusServiceCache()
+        started = asyncio.Event()
+
+        async def cancelled_factory():
+            started.set()
+            await asyncio.Event().wait()
+
+        creator = asyncio.create_task(cache.get_or_create("shared-cancel", cancelled_factory))
+        await started.wait()
+        waiter = asyncio.create_task(cache.get_or_create("shared-cancel", cancelled_factory))
+        await asyncio.sleep(0)
+        creator.cancel()
+
+        results = await asyncio.wait_for(
+            asyncio.gather(creator, waiter, return_exceptions=True),
+            timeout=0.5,
+        )
+
+        assert len(results) == 2
+        assert all(isinstance(result, asyncio.CancelledError) for result in results)
+        assert "shared-cancel" not in cache._futures
+
     async def test_lru_eviction_when_over_capacity(self):
         """Oldest inactive entry is evicted when cache exceeds max_size."""
         cache = DatusServiceCache(max_size=2)

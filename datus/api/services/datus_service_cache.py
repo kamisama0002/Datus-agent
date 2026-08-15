@@ -113,6 +113,15 @@ class DatusServiceCache:
         # We are the creator — run the factory outside the lock
         try:
             svc = await factory()
+        except asyncio.CancelledError:
+            async with self._lock:
+                if self._futures.get(project_id) is fut:
+                    self._futures.pop(project_id, None)
+                    self._future_fingerprints.pop(project_id, None)
+                self._future_replacements.pop(fut, None)
+            if not fut.done():
+                fut.cancel()
+            raise
         except Exception as e:
             async with self._lock:
                 replacement = self._future_replacements.get(fut)

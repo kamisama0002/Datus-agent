@@ -20,7 +20,12 @@ from datus.api.auth.context import AppContext
 from datus.api.auth.provider import EvictCallback
 from datus.utils.exceptions import DatusException, ErrorCode
 from nanzi_datus_bridge.config_builder import NanziConfigBuilder, NanziConfigError
-from nanzi_datus_bridge.nanzi_client import NANZI_DATUS_PROTOCOL, NanziCallbackError, NanziClient
+from nanzi_datus_bridge.nanzi_client import (
+    NANZI_DATUS_PROTOCOL,
+    NanziCallbackConfigurationError,
+    NanziCallbackError,
+    NanziClient,
+)
 from nanzi_datus_bridge.runtime_settings import resolve_setting, service_token_status
 
 
@@ -98,12 +103,15 @@ class NanziAuthProvider:
         self._cache_ttl_seconds = float(cache_ttl_seconds)
         self._max_cache_entries = max_cache_entries
         self._clock = clock
-        self._client = NanziClient(
-            base_url=resolved_url,
-            service_token=resolved_token,
-            protocol=protocol,
-            http_transport=http_transport,
-        )
+        try:
+            self._client = NanziClient(
+                base_url=resolved_url,
+                service_token=resolved_token,
+                protocol=protocol,
+                http_transport=http_transport,
+            )
+        except NanziCallbackConfigurationError:
+            self._configuration_error("NanZi callback configuration is unavailable")
         self._builder = NanziConfigBuilder(home=home)
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._cache_lock = asyncio.Lock()

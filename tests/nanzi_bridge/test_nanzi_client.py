@@ -4,7 +4,11 @@ import httpx
 import pytest
 
 import nanzi_datus_bridge.nanzi_client as nanzi_client_module
-from nanzi_datus_bridge.nanzi_client import NanziCallbackError, NanziClient
+from nanzi_datus_bridge.nanzi_client import (
+    NanziCallbackConfigurationError,
+    NanziCallbackError,
+    NanziClient,
+)
 from tests.nanzi_bridge.conftest import PROTOCOL, SERVICE_TOKEN, project_config, project_id
 
 
@@ -18,7 +22,7 @@ async def test_calls_exact_internal_project_config_contract() -> None:
         return httpx.Response(200, json=project_config())
 
     client = NanziClient(
-        base_url="http://nanzi.local/",
+        base_url="http://127.0.0.1:8000/",
         service_token=SERVICE_TOKEN,
         protocol=PROTOCOL,
         http_transport=httpx.MockTransport(handler),
@@ -35,7 +39,7 @@ async def test_calls_exact_internal_project_config_contract() -> None:
     assert seen_request is not None
     assert seen_request.method == "GET"
     assert seen_request.url == httpx.URL(
-        f"http://nanzi.local/api/internal/datus/v1/projects/{project_id()}/config"
+        f"http://127.0.0.1:8000/api/internal/datus/v1/projects/{project_id()}/config"
     )
     assert seen_request.headers["Authorization"] == f"Bearer {SERVICE_TOKEN}"
     assert seen_request.headers["X-Nanzi-Datus-Protocol"] == PROTOCOL
@@ -53,7 +57,7 @@ async def test_sanitizes_callback_status_and_json_failures(response: httpx.Respo
         return response
 
     client = NanziClient(
-        base_url="http://nanzi.local",
+        base_url="http://127.0.0.1:8000",
         service_token=SERVICE_TOKEN,
         http_transport=httpx.MockTransport(handler),
     )
@@ -81,7 +85,7 @@ async def test_does_not_follow_callback_redirects() -> None:
         return httpx.Response(307, headers={"Location": "http://attacker.invalid/steal"})
 
     client = NanziClient(
-        base_url="http://nanzi.local",
+        base_url="http://127.0.0.1:8000",
         service_token=SERVICE_TOKEN,
         http_transport=httpx.MockTransport(handler),
     )
@@ -95,7 +99,7 @@ async def test_does_not_follow_callback_redirects() -> None:
         )
 
     assert len(requests) == 1
-    assert requests[0].url.host == "nanzi.local"
+    assert requests[0].url.host == "127.0.0.1"
 
 
 @pytest.mark.anyio
@@ -113,7 +117,7 @@ async def test_http_client_always_disables_environment_proxies(monkeypatch) -> N
 
     monkeypatch.setattr(nanzi_client_module.httpx, "AsyncClient", recording_async_client)
     client = NanziClient(
-        base_url="http://nanzi.local",
+        base_url="http://127.0.0.1:8000",
         service_token=SERVICE_TOKEN,
         http_transport=httpx.MockTransport(handler),
     )
@@ -130,3 +134,57 @@ async def test_http_client_always_disables_environment_proxies(monkeypatch) -> N
     assert constructor_kwargs[0]["follow_redirects"] is False
     assert constructor_kwargs[0]["trust_env"] is False
     assert constructor_kwargs[0]["transport"] is client._http_transport
+
+
+@pytest.mark.parametrize(
+    ("base_url", "expected"),
+    [
+        ("http://127.0.0.1:8000", "http://127.0.0.1:8000"),
+        (" http://LOCALHOST:8123/ ", "http://localhost:8123"),
+        ("http://[::1]:9000", "http://[::1]:9000"),
+    ],
+)
+def test_accepts_and_normalizes_explicit_loopback_callback_urls(base_url, expected) -> None:
+    client = NanziClient(base_url=base_url, service_token=SERVICE_TOKEN)
+
+    assert client._base_url == expected
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://127.0.0.1",
+        "http://localhost",
+        "https://127.0.0.1:8000",
+        "http://example.com:8000",
+        "http://127.0.0.2:8000",
+        "http://127.0.0.1:0",
+        "http://127.0.0.1:65536",
+        "http://user@localhost:8000",
+        "http://user:password@localhost:8000",
+        "http://localhost:8000@attacker.invalid",
+        "http://localhost%40attacker.invalid:8000",
+        "http://localhost:8000?target=http://attacker.invalid",
+        "http://localhost:8000#attacker",
+        "http://localhost:8000/api",
+        "http://[::1]",
+        "http://::1:8000",
+        "http://localhost:8000\\@attacker.invalid",
+    ],
+)
+def test_rejects_unsafe_or_ambiguous_callback_urls_before_client_creation(base_url) -> None:
+    requests = 0
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, json=project_config())
+
+    with pytest.raises(NanziCallbackConfigurationError, match="configuration is unavailable"):
+        NanziClient(
+            base_url=base_url,
+            service_token=SERVICE_TOKEN,
+            http_transport=httpx.MockTransport(handler),
+        )
+
+    assert requests == 0

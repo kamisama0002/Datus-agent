@@ -15,7 +15,7 @@ from tests.nanzi_bridge.conftest import PROTOCOL, SERVICE_TOKEN, project_config,
 
 def _provider(http_transport: httpx.AsyncBaseTransport, **kwargs) -> NanziAuthProvider:
     return NanziAuthProvider(
-        callback_url="http://nanzi.local",
+        callback_url="http://127.0.0.1:8000",
         service_token=SERVICE_TOKEN,
         protocol=PROTOCOL,
         http_transport=http_transport,
@@ -165,4 +165,19 @@ async def test_project_config_cache_is_bounded() -> None:
 def test_missing_or_placeholder_service_token_fails_closed(monkeypatch, token) -> None:
     monkeypatch.delenv("MISSING_TOKEN", raising=False)
     with pytest.raises(NanziConfigurationError):
-        NanziAuthProvider(callback_url="http://nanzi.local", service_token=token)
+        NanziAuthProvider(callback_url="http://127.0.0.1:8000", service_token=token)
+
+
+@pytest.mark.parametrize(
+    "callback_url",
+    [
+        "https://127.0.0.1:8000",
+        "http://127.0.0.1",
+        "http://example.com:8000",
+        "http://localhost:8000?next=http://127.0.0.1:8000",
+        "http://localhost:8000#fragment",
+    ],
+)
+def test_rejects_unsafe_callback_url_during_provider_construction(callback_url) -> None:
+    with pytest.raises(NanziConfigurationError, match="configuration is unavailable"):
+        NanziAuthProvider(callback_url=callback_url, service_token=SERVICE_TOKEN)
