@@ -41,7 +41,7 @@ async def test_native_service_dependency_uses_provider_and_exact_request_contrac
         return httpx.Response(200, json=project_config())
 
     provider = NanziAuthProvider(
-        callback_url="http://nanzi.local",
+        callback_url="http://127.0.0.1:8000",
         service_token=SERVICE_TOKEN,
         protocol=PROTOCOL,
         http_transport=httpx.MockTransport(handler),
