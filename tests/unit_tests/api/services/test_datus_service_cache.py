@@ -1,6 +1,7 @@
 """Tests for datus.api.services.datus_service_cache — async LRU cache."""
 
 import asyncio
+import gc
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -96,6 +97,55 @@ class TestGetOrCreate:
 
         assert "fail" not in cache._cache
         assert "fail" not in cache._futures
+
+    async def test_factory_exception_is_consumed_when_creator_has_no_waiters(self):
+        """Creator failure must not emit an un-retrieved Future exception."""
+        cache = DatusServiceCache()
+        loop = asyncio.get_running_loop()
+        contexts = []
+        previous_handler = loop.get_exception_handler()
+
+        async def bad_factory():
+            raise ValueError("config error")
+
+        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
+        try:
+            with pytest.raises(ValueError, match="config error"):
+                await cache.get_or_create("fail-without-waiters", bad_factory)
+            gc.collect()
+            await asyncio.sleep(0)
+        finally:
+            loop.set_exception_handler(previous_handler)
+
+        assert not [
+            context
+            for context in contexts
+            if context.get("message") == "Future exception was never retrieved"
+        ]
+
+    async def test_factory_exception_propagates_to_creator_and_waiter(self):
+        """Consuming the creator Future must not swallow waiter failures."""
+        cache = DatusServiceCache()
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def bad_factory():
+            started.set()
+            await release.wait()
+            raise ValueError("shared config error")
+
+        creator = asyncio.create_task(cache.get_or_create("shared-failure", bad_factory))
+        await started.wait()
+        waiter = asyncio.create_task(cache.get_or_create("shared-failure", bad_factory))
+        await asyncio.sleep(0)
+        release.set()
+
+        results = await asyncio.gather(creator, waiter, return_exceptions=True)
+
+        assert len(results) == 2
+        assert all(isinstance(result, ValueError) for result in results)
+        assert all(str(result) == "shared config error" for result in results)
+        assert "shared-failure" not in cache._futures
 
     async def test_lru_eviction_when_over_capacity(self):
         """Oldest inactive entry is evicted when cache exceeds max_size."""

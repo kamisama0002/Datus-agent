@@ -123,6 +123,7 @@ class DatusServiceCache:
                 return await self._resolve_replacement(fut, replacement)
             if not fut.done():
                 fut.set_exception(e)
+                fut.exception()
             raise
 
         async with self._lock:
