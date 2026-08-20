@@ -37,6 +37,7 @@ _QUERY_LIMITS = {
     "max_rows": 1000,
     "max_result_bytes": 2 * 1024 * 1024,
 }
+_SUPPORTED_DATASOURCE_TYPES = frozenset({"mysql", "starrocks"})
 _PROJECT_ID_PATTERN = re.compile(r"^nzp_[0-9a-f]{32}$")
 _FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _SKILL_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -205,7 +206,7 @@ class NanziConfigBuilder:
             "services": {
                 "datasources": {
                     datasource_name: {
-                        "type": "mysql",
+                        "type": datasource["type"],
                         "host": datasource["host"],
                         "port": datasource["port"],
                         "username": datasource["username"],
@@ -308,7 +309,12 @@ class NanziConfigBuilder:
         )
         valid_id = type(datasource["id"]) is int and datasource["id"] > 0
         valid_port = type(datasource["port"]) is int and 1 <= datasource["port"] <= 65535
-        if datasource["type"] != "mysql" or not valid_strings or not valid_id or not valid_port:
+        if (
+            datasource["type"] not in _SUPPORTED_DATASOURCE_TYPES
+            or not valid_strings
+            or not valid_id
+            or not valid_port
+        ):
             raise NanziConfigError()
         normalized["datasource"] = datasource
 

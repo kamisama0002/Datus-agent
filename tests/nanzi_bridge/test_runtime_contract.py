@@ -57,6 +57,7 @@ def test_runtime_skeleton_contract() -> None:
 
     assert "uv venv --python 3.12 .venv" in setup_script
     assert "datus-mysql" in setup_script
+    assert "datus-starrocks" in setup_script
     assert "datus-metricflow" in setup_script
     assert "datus-semantic-osi[metricflow]" in setup_script
     assert "--host 127.0.0.1 --port 8001 --workers 1" in start_script

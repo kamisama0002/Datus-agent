@@ -20,7 +20,7 @@ From this repository in PowerShell:
 .\scripts\setup-nanzi-integration.ps1
 ```
 
-The script creates `.venv` with Python 3.12 and installs Datus plus the required MySQL and semantic adapters. It does not configure or start either repository.
+The script creates `.venv` with Python 3.12 and installs Datus plus the required MySQL, StarRocks, and semantic adapters. It does not configure or start either repository.
 
 ## Configure the process
 

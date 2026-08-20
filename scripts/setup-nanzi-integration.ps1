@@ -12,5 +12,5 @@ if (-not (Test-Path $python)) {
     throw "Python 3.12 virtual environment was not created at $python."
 }
 
-& $uv pip install --python $python -e . datus-mysql datus-metricflow "datus-semantic-osi[metricflow]"
+& $uv pip install --python $python -e . datus-mysql datus-starrocks datus-metricflow "datus-semantic-osi[metricflow]"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

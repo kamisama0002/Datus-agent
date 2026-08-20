@@ -50,6 +50,15 @@ def test_builds_native_agent_config_in_memory_with_hardened_policy(tmp_path) -> 
     assert not home.exists()
 
 
+def test_preserves_starrocks_datasource_type(tmp_path) -> None:
+    body = project_config()
+    body["datasource"]["type"] = "starrocks"
+
+    config = NanziConfigBuilder(home=str(tmp_path / "runtime-home")).build_agent_config(body)
+
+    assert config.current_db_config().type == "starrocks"
+
+
 def test_native_model_factory_constructs_openai_model(tmp_path) -> None:
     config = NanziConfigBuilder(home=str(tmp_path / "runtime-home")).build_agent_config(project_config())
 
@@ -190,7 +199,7 @@ def test_rejects_protocol_or_policy_shape_drift(overrides, message) -> None:
         NanziConfigBuilder().build_agent_config(project_config(overrides=overrides))
 
 
-def test_rejects_non_mysql_or_incomplete_credentials_without_leaking_them() -> None:
+def test_rejects_unsupported_datasource_or_incomplete_credentials_without_leaking_them() -> None:
     body = project_config(password="credential-that-must-not-leak")
     body["datasource"]["type"] = "postgresql"
 
