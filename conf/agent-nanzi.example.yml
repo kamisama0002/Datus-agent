@@ -13,6 +13,7 @@ agent:
       kwargs:
         callback_url: ${NANZI_CALLBACK_URL}
         service_token: ${NANZI_DATUS_INTERNAL_TOKEN}
+        skills_root: ${NANZI_SKILLS_ROOT}
         protocol: nanzi-datus/v1
         cache_ttl_seconds: 30
         max_cache_entries: 128

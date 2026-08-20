@@ -28,7 +28,6 @@ from nanzi_datus_bridge.nanzi_client import (
 )
 from nanzi_datus_bridge.runtime_settings import resolve_setting, service_token_status
 
-
 _MAX_CACHE_TTL_SECONDS = 30.0
 _MAX_CACHE_ENTRIES = 1024
 _DEFAULT_CACHE_ENTRIES = 128
@@ -82,6 +81,7 @@ class NanziAuthProvider:
         cache_ttl_seconds: float = _MAX_CACHE_TTL_SECONDS,
         max_cache_entries: int = _DEFAULT_CACHE_ENTRIES,
         home: str = "~/.datus-nanzi",
+        skills_root: str | None = None,
         http_transport: httpx.AsyncBaseTransport | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -112,20 +112,37 @@ class NanziAuthProvider:
             )
         except NanziCallbackConfigurationError:
             self._configuration_error("NanZi callback configuration is unavailable")
-        self._builder = NanziConfigBuilder(home=home)
+        if skills_root is None:
+            resolved_skills_root = self._resolve_setting(None, "NANZI_SKILLS_ROOT")
+            if not resolved_skills_root:
+                resolved_skills_root = "~/.agents/skills"
+        else:
+            resolved_skills_root = self._resolve_setting(
+                skills_root,
+                "NANZI_SKILLS_ROOT",
+            )
+            if not resolved_skills_root:
+                self._configuration_error(
+                    "NanZi Skill directory configuration is unavailable"
+                )
+        self._builder = NanziConfigBuilder(
+            home=home,
+            skills_root=resolved_skills_root,
+        )
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._cache_lock = asyncio.Lock()
         self._evict_callbacks: list[EvictCallback] = []
 
     async def authenticate(self, request: Request) -> AppContext:
         identity = self._authenticate_headers(request)
+        cache_key = f"{identity.project_id}:{identity.user_id}"
         async with self._cache_lock:
-            previous = self._cache.get(identity.project_id)
+            previous = self._cache.get(cache_key)
             if previous is not None:
                 if previous.agent_id != identity.agent_id or previous.datasource_id != identity.datasource_id:
                     self._configuration_error("NanZi project identity is incompatible")
                 if previous.expires_at > self._clock():
-                    self._cache.move_to_end(identity.project_id)
+                    self._cache.move_to_end(cache_key)
                     return self._app_context(identity, previous.config)
 
             try:
@@ -136,7 +153,12 @@ class NanziAuthProvider:
                     datasource_id=identity.datasource_id,
                     trace_id=identity.trace_id,
                 )
-                config = self._builder.build_agent_config(payload)
+                config = self._builder.build_agent_config(
+                    payload,
+                    user_id=identity.user_id,
+                    trace_id=identity.trace_id,
+                    service_token=self._service_token,
+                )
             except (NanziCallbackError, NanziConfigError):
                 self._configuration_error("NanZi project configuration is incompatible")
 
@@ -172,8 +194,8 @@ class NanziAuthProvider:
                     expires_at=self._clock() + self._cache_ttl_seconds,
                 )
 
-            self._cache[identity.project_id] = entry
-            self._cache.move_to_end(identity.project_id)
+            self._cache[cache_key] = entry
+            self._cache.move_to_end(cache_key)
             while len(self._cache) > self._max_cache_entries:
                 self._cache.popitem(last=False)
             return self._app_context(identity, entry.config)
@@ -200,7 +222,9 @@ class NanziAuthProvider:
         user_id = self._required_header(request, "X-Nanzi-User-Id", _SAFE_ID)
         agent_id = self._required_header(request, "X-Nanzi-Agent-Id", _SAFE_ID)
         datasource_id = self._required_header(request, "X-Nanzi-Datasource-Id", re.compile(r"^[1-9][0-9]{0,18}$"))
-        trace_id = self._required_header(request, "X-Nanzi-Trace-Id", _SAFE_ID)
+        trace_id = request.headers.get("X-Trace-Id") or request.headers.get("X-Nanzi-Trace-Id")
+        if not trace_id or not _SAFE_ID.fullmatch(trace_id):
+            self._authentication_error()
         expected_project_id = self._build_project_id(agent_id, datasource_id)
         if not hmac.compare_digest(project_id.encode("ascii"), expected_project_id.encode("ascii")):
             self._authentication_error("NanZi project identity is invalid")

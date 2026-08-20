@@ -856,6 +856,42 @@ class TestBuildInteractionResultContent:
 class TestActionToSSEEvent:
     """Tests for the main action_to_sse_event dispatcher."""
 
+    def test_message_payload_carries_action_stage_duration_for_tracing(self):
+        """Completed actions expose timing without forwarding private content."""
+        start = datetime(2025, 6, 15, 10, 0, 0)
+        action = _make_action(
+            action_id="analysis-42",
+            action_type="gen_sql",
+            status=ActionStatus.SUCCESS,
+            start_time=start,
+            end_time=start + timedelta(seconds=1.25),
+            output={"thinking": "private reasoning"},
+        )
+
+        event = action_to_sse_event(action, event_id=42, message_id="message-42")
+
+        assert event is not None
+        payload = event.data.payload
+        assert payload.action_id == "analysis-42"
+        assert payload.action_type == "gen_sql"
+        assert payload.action_status == "success"
+        assert payload.duration_ms == 1250.0
+
+    def test_processing_message_has_no_completed_duration(self):
+        action = _make_action(
+            action_id="tool-42",
+            role=ActionRole.TOOL,
+            action_type="tool",
+            status=ActionStatus.PROCESSING,
+            end_time=None,
+            input={"function_name": "run_sql", "arguments": {}},
+        )
+
+        event = action_to_sse_event(action, event_id=43, message_id="message-43")
+
+        assert event is not None
+        assert event.data.payload.duration_ms is None
+
     def test_assistant_failed_action_produces_error_event(self):
         """ASSISTANT + FAILED falls through to the catch-all error branch."""
         action = _make_action(

@@ -4,9 +4,8 @@ import hashlib
 from collections.abc import Mapping
 from typing import Any
 
-from fastapi import Request
 import pytest
-
+from fastapi import Request
 
 SERVICE_TOKEN = "unit-test-service-token"
 PROTOCOL = "nanzi-datus/v1"
@@ -73,6 +72,9 @@ def project_config(
             "model": "gpt-4.1-mini",
             "api_key": "test-model-api-key",
             "base_url": "https://models.internal/v1",
+            "default_headers": {
+                "x-openai-actor-authorization": "local-image-extension",
+            },
         },
         "config_mutable": False,
         "bash": {"enabled": False},
@@ -82,6 +84,7 @@ def project_config(
             "max_rows": 1000,
             "max_result_bytes": 2 * 1024 * 1024,
         },
+        "skills": [],
         "config_fingerprint": fingerprint,
     }
     if overrides:

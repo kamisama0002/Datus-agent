@@ -449,6 +449,18 @@ def _build_token_usage_event(action: ActionHistory, event_id: int) -> Optional[S
     )
 
 
+def _action_duration_ms(action: ActionHistory) -> Optional[float]:
+    """Return the duration of a completed action for downstream tracing."""
+    start_time = getattr(action, "start_time", None)
+    end_time = getattr(action, "end_time", None)
+    if start_time is None or end_time is None:
+        return None
+    try:
+        return max(0.0, (end_time - start_time).total_seconds() * 1000)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def action_to_sse_event(
     action: ActionHistory,
     event_id: int,
@@ -617,6 +629,10 @@ def action_to_sse_event(
                 content=contents,
                 depth=action.depth,
                 parent_action_id=action.parent_action_id,
+                action_id=str(action.action_id or "") or None,
+                action_type=str(action.action_type or "") or None,
+                action_status=str(getattr(action.status, "value", action.status) or "") or None,
+                duration_ms=_action_duration_ms(action),
             ),
         )
 

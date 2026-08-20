@@ -59,7 +59,7 @@ dependencies = [
     "duckdb-engine>=0.17.0",
     "duckdb==1.5.2",
     # MCP (Model Context Protocol) support
-    "mcp>=1.11.0",
+    "mcp>=1.11.0,<2",
     "anyio>=4.9.0",
     "json-repair>=0.47.6",
     "fastapi>=0.104.0,<1.0",

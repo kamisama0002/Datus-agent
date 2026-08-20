@@ -11,6 +11,7 @@ import asyncio
 import copy
 import uuid
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 
 from datus.agent.node.agentic_node import AgenticNode
@@ -46,6 +47,15 @@ HEARTBEAT_INTERVAL = 10  # seconds
 # Max run-boundary auto-continuations per task, bounding a client that keeps
 # POSTing /chat/insert from running one task indefinitely.
 _MAX_INSERT_CONTINUATIONS = 20
+
+
+def _clone_agent_config(agent_config: AgentConfig) -> AgentConfig:
+    immutable_sidecars = {
+        id(value): value
+        for value in vars(agent_config).values()
+        if isinstance(value, MappingProxyType)
+    }
+    return copy.deepcopy(agent_config, immutable_sidecars)
 
 
 def is_thinking_only_content(content_items) -> bool:
@@ -361,7 +371,7 @@ class ChatTaskManager:
         Raises ``ValueError`` if a task is already running for the session.
         """
         # Clone config to avoid cross-request mutation of shared AgentConfig
-        agent_config = copy.deepcopy(agent_config)
+        agent_config = _clone_agent_config(agent_config)
         agent_config.principal = dict(principal or {})
         # API surface has no interactive broker to confirm EXTERNAL file
         # access, so force filesystem strict mode — every node constructed

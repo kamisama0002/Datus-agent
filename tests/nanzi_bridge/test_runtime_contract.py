@@ -6,11 +6,8 @@ import importlib
 import re
 from pathlib import Path
 
-import pytest
-
 from datus.api.auth.loader import load_auth_provider
 from datus.configuration.agent_config_loader import load_agent_config
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -52,9 +49,11 @@ def test_runtime_skeleton_contract() -> None:
     assert assignments == [
         "NANZI_CALLBACK_URL=http://127.0.0.1:8000",
         "NANZI_DATUS_INTERNAL_TOKEN=",
+        "NANZI_SKILLS_ROOT=~/.agents/skills",
     ]
     assert "${NANZI_CALLBACK_URL}" in config
     assert "${NANZI_DATUS_INTERNAL_TOKEN}" in config
+    assert "${NANZI_SKILLS_ROOT}" in config
 
     assert "uv venv --python 3.12 .venv" in setup_script
     assert "datus-mysql" in setup_script

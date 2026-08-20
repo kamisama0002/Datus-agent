@@ -9,6 +9,8 @@ The NanZi bridge runs from this Datus repository in its own Python 3.12 virtual 
 - Worker count: exactly `--workers 1`; the project cache is process-local
 - Project configuration: fetched from NanZi after authenticated requests and held in memory
 - SQL permissions: read-only policy, immutable project configuration, and disabled Bash tools
+- MCP: the `nanzi_mcp` Streamable HTTP server is injected by NanZi; Datus receives only the gateway URL and the shared bridge identity headers. Only this authenticated namespace is allowed non-interactively, while NanZi still filters every call to the user's published Agent version. External MCP URLs and credentials remain in NanZi.
+- Skills: NanZi returns only published-version platform Skill IDs and `SKILL.md` hashes. The bridge resolves them below `NANZI_SKILLS_ROOT`, rejects path or hash drift, and injects the verified directories into Datus's native Skill Registry. Personal Skills and arbitrary paths never cross the boundary.
 
 ## Prepare the Datus environment
 
@@ -26,10 +28,21 @@ Use [.env.nanzi.example](../../.env.nanzi.example) as the variable inventory. Se
 
 ```powershell
 $env:NANZI_CALLBACK_URL = "http://127.0.0.1:8000"
+$env:NANZI_SKILLS_ROOT = "C:\shared\nanzi\skills"
 $env:NANZI_DATUS_INTERNAL_TOKEN = [Convert]::ToHexString(
     [Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
 ).ToLowerInvariant()
 ```
+
+`NANZI_SKILLS_ROOT` must point to the same platform Skills directory used by
+NanZi. On a same-user deployment the default `~/.agents/skills` is sufficient.
+The Datus process needs read access only. Each selected Skill must exist as
+`<root>/<skill-id>/SKILL.md`; its bytes must match the hash in NanZi's signed
+project configuration.
+
+NanZi advertises its MCP gateway in the project callback response. For a
+separate host or LAN deployment, set NanZi's `DATUS_MCP_BASE_URL` to an origin
+reachable from Datus; the default is `http://127.0.0.1:${API_SERVICE_PORT}`.
 
 Generate the token once and supply the same value to NanZi through its secret-management path. Angle-bracket values, `change-me`, `example-*`, and `replace-with-a-shared-secret` are rejected as placeholders.
 

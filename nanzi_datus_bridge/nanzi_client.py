@@ -7,7 +7,6 @@ from urllib.parse import urlsplit
 
 import httpx
 
-
 NANZI_DATUS_PROTOCOL = "nanzi-datus/v1"
 _CALLBACK_ERROR = "NanZi project configuration is unavailable"
 
@@ -72,6 +71,11 @@ class NanziClient:
         self._protocol = protocol
         self._timeout = httpx.Timeout(timeout_seconds)
         self._http_transport = http_transport
+
+    @property
+    def base_url(self) -> str:
+        """Validated NanZi origin, useful to hosts colocating the MCP gateway."""
+        return self._base_url
 
     async def fetch_project_config(
         self,

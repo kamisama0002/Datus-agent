@@ -523,6 +523,10 @@ class SSEMessagePayload(BaseModel):
     content: List[IMessageContent] = Field(default_factory=list, description="Message content list")
     depth: int = Field(default=0, description="Nesting depth (0=main, 1=sub-agent)")
     parent_action_id: Optional[str] = Field(default=None, description="Parent action ID for sub-agent grouping")
+    action_id: Optional[str] = Field(default=None, description="Source action ID for trace correlation")
+    action_type: Optional[str] = Field(default=None, description="Source action stage type")
+    action_status: Optional[str] = Field(default=None, description="Source action status")
+    duration_ms: Optional[float] = Field(default=None, ge=0, description="Completed action duration in milliseconds")
     at_context: Optional[AtContextData] = Field(
         default=None, description="@-referenced context for a user message (history replay only)"
     )
