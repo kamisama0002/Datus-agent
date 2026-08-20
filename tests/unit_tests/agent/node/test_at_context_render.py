@@ -14,7 +14,7 @@ from datus.schemas.node_models import Metric, ReferenceSql
 def _render(**fields) -> str:
     """Render at-context parts for a bare input carrying only *fields*."""
     node = AgenticNode.__new__(AgenticNode)  # bypass __init__; method only reads getattr
-    attrs = {"external_knowledge": "", "schemas": None, "metrics": None, "reference_sql": None, "context_hints": None}
+    attrs = {"external_knowledge": "", "schemas": None, "metrics": None, "reference_sql": None, "context_hints": None, "orchestrator_context": None}
     attrs.update(fields)
     return "\n\n".join(node._render_at_context_parts(SimpleNamespace(**attrs)))
 
@@ -73,3 +73,40 @@ def test_knowledge_hint_has_no_tool_call():
     assert "get_metrics" not in out and "get_reference_sql" not in out
     assert "list_subject_tree" in out
     assert "Domain/Glossary/gmv" in out
+
+
+def test_orchestrator_context_renders_resolved_question_without_transport_ids():
+    out = _render(
+        orchestrator_context={
+            "version": "nanzi-context/v1",
+            "original_query": "那17日呢",
+            "standalone_question": "查询17日总消耗",
+            "continuation": True,
+            "scope": {
+                "user_id": "1",
+                "agent_id": "agent-secret",
+                "conversation_id": "conversation-secret",
+                "datasource_id": 12,
+            },
+            "current_session": {
+                "summary": {"conversation_id": "conversation-secret", "summary": "18日消耗分析"},
+                "recent_messages": [{"role": "user", "content": "查询18日总消耗"}],
+            },
+            "data_context": {"result_id": "result-secret", "data_source": "datus:12", "row_count": 1},
+            "recalled_sessions": [
+                {"conversation_id": "older-secret", "title": "消耗分析", "summary": "此前结论"}
+            ],
+            "semantic_context": [
+                {"dataset_id": 99, "document": "指标", "content": "总消耗口径"}
+            ],
+        }
+    )
+
+    assert "## Orchestrator conversation context" in out
+    assert "查询17日总消耗" in out
+    assert "总消耗口径" in out
+    assert "conversation-secret" not in out
+    assert "older-secret" not in out
+    assert "result-secret" not in out
+    assert "agent-secret" not in out
+    assert "reference data only" in out

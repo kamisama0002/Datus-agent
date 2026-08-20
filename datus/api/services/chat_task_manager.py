@@ -687,6 +687,11 @@ class ChatTaskManager:
                 db_schema=request.db_schema,
                 plan_mode=request.plan_mode or False,
                 source_session_id=request.source_session_id,
+                orchestrator_context=(
+                    request.orchestrator_context.model_dump(mode="json")
+                    if request.orchestrator_context is not None
+                    else None
+                ),
             )
             node.input = node_input
 
@@ -1163,6 +1168,7 @@ class ChatTaskManager:
         db_schema: Optional[str] = None,
         plan_mode: bool = False,
         source_session_id: Optional[str] = None,
+        orchestrator_context: Optional[Dict[str, Any]] = None,
     ):
         """Create node input based on node type.
 
@@ -1196,6 +1202,7 @@ class ChatTaskManager:
             prompt_language="en",
             plan_mode=plan_mode,
             source_session_id=source_session_id,
+            orchestrator_context=orchestrator_context,
         )
 
     # ------------------------------------------------------------------

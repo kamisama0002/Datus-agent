@@ -21,6 +21,13 @@ def project_id(agent_id: str = "agent-17", datasource_id: str = "17") -> str:
     return f"nzp_{digest[:32]}"
 
 
+def runtime_project_id(model_id: str) -> str:
+    digest = hashlib.sha256(
+        b"nanzi-datus-model-runtime-v1\0" + model_id.encode("ascii")
+    ).hexdigest()
+    return f"{project_id()}_m_{digest[:32]}"
+
+
 def request_for(
     *,
     token: str = SERVICE_TOKEN,
@@ -29,6 +36,7 @@ def request_for(
     datasource_id: str = "17",
     user_id: str = "user-23",
     trace_id: str = "trace-29",
+    model_id: str | None = None,
     supplied_project_id: str | None = None,
     omit: set[str] | None = None,
 ) -> Request:
@@ -41,6 +49,8 @@ def request_for(
         "x-nanzi-datasource-id": datasource_id,
         "x-nanzi-trace-id": trace_id,
     }
+    if model_id is not None:
+        values["x-nanzi-model-id"] = model_id
     omitted = omit or set()
     headers = [(name.encode("ascii"), value.encode("utf-8")) for name, value in values.items() if name not in omitted]
     return Request({"type": "http", "method": "POST", "path": "/api/v1/chat/stream", "headers": headers})

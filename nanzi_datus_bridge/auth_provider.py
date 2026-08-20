@@ -33,6 +33,8 @@ _MAX_CACHE_ENTRIES = 1024
 _DEFAULT_CACHE_ENTRIES = 128
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _PROJECT_ID = re.compile(r"^nzp_[0-9a-f]{32}$")
+_MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,254}$")
+_RUNTIME_PROJECT_DOMAIN = b"nanzi-datus-model-runtime-v1\0"
 
 
 class NanziBridgeError(DatusException):
@@ -57,6 +59,7 @@ class _Identity:
     agent_id: str
     datasource_id: str
     trace_id: str
+    model_id: str | None
 
 
 @dataclass(frozen=True)
@@ -135,7 +138,8 @@ class NanziAuthProvider:
 
     async def authenticate(self, request: Request) -> AppContext:
         identity = self._authenticate_headers(request)
-        cache_key = f"{identity.project_id}:{identity.user_id}"
+        runtime_project_id = self._runtime_project_id(identity)
+        cache_key = f"{runtime_project_id}:{identity.user_id}"
         async with self._cache_lock:
             previous = self._cache.get(cache_key)
             if previous is not None:
@@ -143,7 +147,7 @@ class NanziAuthProvider:
                     self._configuration_error("NanZi project identity is incompatible")
                 if previous.expires_at > self._clock():
                     self._cache.move_to_end(cache_key)
-                    return self._app_context(identity, previous.config)
+                    return self._app_context(identity, runtime_project_id, previous.config)
 
             try:
                 payload = await self._client.fetch_project_config(
@@ -152,6 +156,7 @@ class NanziAuthProvider:
                     agent_id=identity.agent_id,
                     datasource_id=identity.datasource_id,
                     trace_id=identity.trace_id,
+                    model_id=identity.model_id,
                 )
                 config = self._builder.build_agent_config(
                     payload,
@@ -184,7 +189,7 @@ class NanziAuthProvider:
                 )
             else:
                 if previous is not None:
-                    await self._evict_changed_project(identity.project_id)
+                    await self._evict_changed_project(runtime_project_id)
                 entry = _CacheEntry(
                     config=config,
                     fingerprint=fingerprint,
@@ -198,7 +203,7 @@ class NanziAuthProvider:
             self._cache.move_to_end(cache_key)
             while len(self._cache) > self._max_cache_entries:
                 self._cache.popitem(last=False)
-            return self._app_context(identity, entry.config)
+            return self._app_context(identity, runtime_project_id, entry.config)
 
     def on_evict(self, callback: EvictCallback) -> None:
         if not callable(callback):
@@ -225,10 +230,13 @@ class NanziAuthProvider:
         trace_id = request.headers.get("X-Trace-Id") or request.headers.get("X-Nanzi-Trace-Id")
         if not trace_id or not _SAFE_ID.fullmatch(trace_id):
             self._authentication_error()
+        model_id = request.headers.get("X-Nanzi-Model-Id")
+        if model_id is not None and not _MODEL_ID.fullmatch(model_id):
+            self._authentication_error()
         expected_project_id = self._build_project_id(agent_id, datasource_id)
         if not hmac.compare_digest(project_id.encode("ascii"), expected_project_id.encode("ascii")):
             self._authentication_error("NanZi project identity is invalid")
-        return _Identity(project_id, user_id, agent_id, datasource_id, trace_id)
+        return _Identity(project_id, user_id, agent_id, datasource_id, trace_id, model_id)
 
     @staticmethod
     def _required_header(request: Request, name: str, pattern: re.Pattern[str]) -> str:
@@ -243,6 +251,17 @@ class NanziAuthProvider:
         return f"nzp_{hashlib.sha256(value).hexdigest()[:32]}"
 
     @staticmethod
+    def _runtime_project_id(identity: _Identity) -> str:
+        if identity.model_id is None:
+            return identity.project_id
+        # Keep model-specific services isolated while AgentConfig.project_name
+        # continues to point at the shared NanZi session directory.
+        digest = hashlib.sha256(
+            _RUNTIME_PROJECT_DOMAIN + identity.model_id.encode("ascii")
+        ).hexdigest()[:32]
+        return f"{identity.project_id}_m_{digest}"
+
+    @staticmethod
     def _payload_digest(payload: dict[str, object]) -> str:
         canonical = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -255,16 +274,23 @@ class NanziAuthProvider:
             self._configuration_error("NanZi project cache eviction failed")
 
     @staticmethod
-    def _app_context(identity: _Identity, config: object) -> AppContext:
+    def _app_context(
+        identity: _Identity,
+        runtime_project_id: str,
+        config: object,
+    ) -> AppContext:
+        principal = {
+            "tenant_id": "default",
+            "agent_id": identity.agent_id,
+            "datasource_id": identity.datasource_id,
+        }
+        if identity.model_id is not None:
+            principal["model_id"] = identity.model_id
         return AppContext(
             user_id=identity.user_id,
-            project_id=identity.project_id,
+            project_id=runtime_project_id,
             config=config,
-            principal={
-                "tenant_id": "default",
-                "agent_id": identity.agent_id,
-                "datasource_id": identity.datasource_id,
-            },
+            principal=principal,
         )
 
     @staticmethod

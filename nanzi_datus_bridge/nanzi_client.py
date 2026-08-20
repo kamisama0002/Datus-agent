@@ -85,6 +85,7 @@ class NanziClient:
         agent_id: str,
         datasource_id: str,
         trace_id: str,
+        model_id: str | None = None,
     ) -> dict[str, Any]:
         path = f"/api/internal/datus/v1/projects/{project_id}/config"
         headers = {
@@ -96,6 +97,8 @@ class NanziClient:
             "X-Nanzi-Agent-Id": agent_id,
             "X-Nanzi-Datasource-Id": datasource_id,
         }
+        if model_id is not None:
+            headers["X-Nanzi-Model-Id"] = model_id
         try:
             async with httpx.AsyncClient(
                 timeout=self._timeout,

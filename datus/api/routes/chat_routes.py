@@ -121,6 +121,32 @@ def _sql_policy_principal_pre_check(svc: "DatusService", ctx: "AppContext") -> O
     )
 
 
+def _validate_orchestrator_scope(request: StreamChatInput, ctx: "AppContext") -> None:
+    """Bind the trusted NanZi context envelope to the authenticated request."""
+    orchestrator_context = request.orchestrator_context
+    if orchestrator_context is None:
+        return
+    scope = orchestrator_context.scope
+    principal = getattr(ctx, "principal", None)
+    if not isinstance(principal, dict):
+        principal = {}
+    expected = (
+        str(getattr(ctx, "user_id", "") or ""),
+        str(principal.get("agent_id") or ""),
+        str(principal.get("datasource_id") or ""),
+    )
+    supplied = (
+        scope.user_id,
+        scope.agent_id,
+        str(scope.datasource_id),
+    )
+    if any(not value for value in expected) or supplied != expected:
+        raise HTTPException(
+            status_code=403,
+            detail="Request context does not match authenticated identity",
+        )
+
+
 def _required_principal_paths(raw: Any) -> list[str]:
     paths: set[str] = set()
 
@@ -182,6 +208,8 @@ async def stream_chat(
             status_code=404,
             detail=f"Subagent '{sub_agent_id}' not found",
         )
+
+    _validate_orchestrator_scope(request, ctx)
 
     sql_policy_denial = _sql_policy_principal_pre_check(svc, ctx)
     if sql_policy_denial:

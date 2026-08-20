@@ -1528,6 +1528,21 @@ class TestCreateNodeInput:
         result = manager._create_node_input("hello", node, [], [], [])
         assert result.user_message == "hello"
 
+    def test_default_node_input_carries_orchestrator_context(self, real_agent_config, mock_llm_create):
+        manager = ChatTaskManager()
+        node = manager._create_node(real_agent_config, None, "test")
+        context = {"version": "nanzi-context/v1", "standalone_question": "resolved"}
+        result = manager._create_node_input(
+            "follow up",
+            node,
+            [],
+            [],
+            [],
+            orchestrator_context=context,
+        )
+
+        assert result.orchestrator_context == context
+
     @pytest.mark.parametrize("agent_name", ["gen_semantic_model", "gen_metrics"])
     def test_retired_semantic_nodes_have_no_input_path(self, real_agent_config, mock_llm_create, agent_name):
         """Input construction is unreachable for retired semantic nodes."""

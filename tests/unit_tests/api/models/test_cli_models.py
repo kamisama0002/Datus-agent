@@ -130,3 +130,72 @@ class TestStreamChatInputLanguage:
         obj = StreamChatInput(message="hi", prompt_language="zh", language="en")
         assert obj.prompt_language == "zh"
         assert obj.language == "en"
+
+
+class TestStreamChatInputOrchestratorContext:
+    def test_accepts_bounded_nanzi_context(self):
+        obj = StreamChatInput(
+            message="那17日呢",
+            orchestrator_context={
+                "version": "nanzi-context/v1",
+                "original_query": "那17日呢",
+                "standalone_question": "查询17日总消耗",
+                "continuation": True,
+                "cross_session_recall": False,
+                "scope": {
+                    "user_id": "1",
+                    "agent_id": "agent-1",
+                    "conversation_id": "conversation-1",
+                    "datasource_id": 12,
+                },
+                "current_session": {
+                    "summary": None,
+                    "recent_messages": [
+                        {"role": "user", "content": "查询18日总消耗"},
+                        {"role": "assistant", "content": "18日总消耗为100元"},
+                    ],
+                },
+                "data_context": None,
+                "recalled_sessions": [],
+                "semantic_context": [],
+            },
+        )
+
+        assert obj.orchestrator_context is not None
+        assert obj.orchestrator_context.standalone_question == "查询17日总消耗"
+        assert len(obj.orchestrator_context.current_session.recent_messages) == 2
+
+    def test_rejects_unknown_or_oversized_context(self):
+        with pytest.raises(ValidationError):
+            StreamChatInput(
+                message="hi",
+                orchestrator_context={
+                    "version": "nanzi-context/v1",
+                    "original_query": "hi",
+                    "standalone_question": "hi",
+                    "scope": {
+                        "user_id": "1",
+                        "agent_id": "agent-1",
+                        "conversation_id": "conversation-1",
+                        "datasource_id": 12,
+                    },
+                    "current_session": {"recent_messages": []},
+                    "unknown": "not allowed",
+                },
+            )
+        with pytest.raises(ValidationError):
+            StreamChatInput(
+                message="hi",
+                orchestrator_context={
+                    "version": "nanzi-context/v1",
+                    "original_query": "hi",
+                    "standalone_question": "x" * 6001,
+                    "scope": {
+                        "user_id": "1",
+                        "agent_id": "agent-1",
+                        "conversation_id": "conversation-1",
+                        "datasource_id": 12,
+                    },
+                    "current_session": {"recent_messages": []},
+                },
+            )

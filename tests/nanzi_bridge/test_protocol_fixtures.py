@@ -16,7 +16,7 @@ from datus.schemas.action_history import ActionHistory, ActionRole, ActionStatus
 from nanzi_datus_bridge.auth_provider import NanziAuthProvider, NanziConfigurationError
 from nanzi_datus_bridge.nanzi_client import NANZI_DATUS_PROTOCOL
 from nanzi_datus_bridge.runtime_settings import service_token_status
-from tests.nanzi_bridge.conftest import project_config, project_id
+from tests.nanzi_bridge.conftest import project_config, runtime_project_id
 
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "nanzi_datus" / "v1"
@@ -209,6 +209,7 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
         "X-Nanzi-Agent-Id",
         "X-Nanzi-Datasource-Id",
         "X-Nanzi-Datus-Protocol",
+        "X-Nanzi-Model-Id",
         "X-Nanzi-Project-Id",
         "X-Nanzi-Trace-Id",
         "X-Nanzi-User-Id",
@@ -236,10 +237,11 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert fixture["request"]["path"] == "/api/v1/chat/stream"
     assert body.model_dump(mode="json", exclude_none=True) == fixture["request"]["json"]
     assert body.session_id == SESSION_ID
-    assert context.project_id == project_id()
+    assert context.project_id == runtime_project_id("deepseek/deepseek-chat")
     assert context.user_id == "user-23"
     assert callback_requests[0].headers["X-Trace-Id"] == "trace-29"
     assert callback_requests[0].headers["X-Nanzi-Datus-Protocol"] == NANZI_DATUS_PROTOCOL
+    assert callback_requests[0].headers["X-Nanzi-Model-Id"] == "deepseek/deepseek-chat"
 
 
 def test_sse_fixture_is_exact_converter_and_dto_wire_contract() -> None:

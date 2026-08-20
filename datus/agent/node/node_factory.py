@@ -306,6 +306,7 @@ def create_node_input(
     at_sqls=None,
     external_knowledge: Optional[str] = None,
     context_hints=None,
+    orchestrator_context=None,
     prompt_language: str = "en",
     plan_mode: bool = False,
     source_session_id: Optional[str] = None,
@@ -352,6 +353,7 @@ def create_node_input(
         reference_sql=at_sqls,
         external_knowledge=external_knowledge,
         context_hints=context_hints,
+        orchestrator_context=orchestrator_context,
     )
 
 

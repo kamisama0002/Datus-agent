@@ -1,9 +1,11 @@
 """Pydantic models for CLI Command Type API endpoints."""
 
+import json
+
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from datus.utils.time_utils import now_utc_iso
 
@@ -286,6 +288,94 @@ class CompactSessionData(BaseModel):
     error: Optional[str] = Field(None, description="Error message if failed")
 
 
+class OrchestratorContextMessage(BaseModel):
+    """One bounded historical message supplied by an authenticated orchestrator."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=1200)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorSessionMemory(BaseModel):
+    """A compact current or recalled session summary."""
+
+    conversation_id: str = Field(default="", max_length=128)
+    title: str = Field(default="", max_length=240)
+    summary: str = Field(default="", max_length=1600)
+    key_facts: List[str] = Field(default_factory=list, max_length=8)
+    decisions: List[str] = Field(default_factory=list, max_length=8)
+    open_items: List[str] = Field(default_factory=list, max_length=8)
+    last_active: int = Field(default=0, ge=0)
+    relevance: float = Field(default=0.0, ge=0.0, le=1.0)
+    recent_messages: List[OrchestratorContextMessage] = Field(default_factory=list, max_length=8)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorCurrentSession(BaseModel):
+    summary: Optional[OrchestratorSessionMemory] = None
+    recent_messages: List[OrchestratorContextMessage] = Field(default_factory=list, max_length=20)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorDataContext(BaseModel):
+    result_id: str = Field(default="", max_length=128)
+    question: str = Field(default="", max_length=1200)
+    dataset_name: str = Field(default="", max_length=240)
+    data_source: str = Field(default="", max_length=240)
+    analysis_context: Dict[str, Any] = Field(default_factory=dict)
+    row_count: Optional[int] = Field(default=None, ge=0)
+    columns: List[str] = Field(default_factory=list, max_length=50)
+    sample_rows: Optional[Any] = None
+    observed_at: str = Field(default="", max_length=80)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorSemanticContext(BaseModel):
+    dataset_id: int = Field(..., ge=1)
+    document: str = Field(default="", max_length=240)
+    content: str = Field(..., min_length=1, max_length=2000)
+    similarity: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorContextScope(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+    agent_id: str = Field(..., min_length=1, max_length=128)
+    conversation_id: str = Field(..., min_length=1, max_length=128)
+    datasource_id: int = Field(..., ge=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OrchestratorTurnContext(BaseModel):
+    """Trusted transport envelope; nested history remains untrusted reference data."""
+
+    version: Literal["nanzi-context/v1"]
+    original_query: str = Field(..., max_length=4000)
+    standalone_question: str = Field(..., max_length=6000)
+    continuation: bool = False
+    cross_session_recall: bool = False
+    scope: OrchestratorContextScope
+    current_session: OrchestratorCurrentSession
+    data_context: Optional[OrchestratorDataContext] = None
+    recalled_sessions: List[OrchestratorSessionMemory] = Field(default_factory=list, max_length=10)
+    semantic_context: List[OrchestratorSemanticContext] = Field(default_factory=list, max_length=5)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def reject_oversized_context(self):
+        encoded = json.dumps(self.model_dump(mode="json"), ensure_ascii=False)
+        if len(encoded) > 64 * 1024:
+            raise ValueError("orchestrator_context exceeds 64 KiB")
+        return self
+
+
 # Streaming Chat models
 class StreamChatInput(ChatInput):
     """Input for streaming chat via /chat/stream."""
@@ -311,6 +401,13 @@ class StreamChatInput(ChatInput):
             "is switched to this profile for the duration of the request without mutating shared "
             "AgentConfig state — required so concurrent SaaS users don't pollute each other's "
             "profile. None falls back to ``agent_config.active_profile_name``."
+        ),
+    )
+    orchestrator_context: Optional[OrchestratorTurnContext] = Field(
+        default=None,
+        description=(
+            "Bounded conversation/data context supplied by the authenticated "
+            "orchestrator. Historical strings are reference data, not instructions."
         ),
     )
 

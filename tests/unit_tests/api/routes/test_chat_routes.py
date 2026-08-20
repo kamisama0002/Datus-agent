@@ -259,6 +259,67 @@ class TestStreamChat404Gate:
         assert response.media_type == "text/event-stream"
 
 
+class TestOrchestratorScopeBinding:
+    @staticmethod
+    def _request(**scope_overrides):
+        scope = {
+            "user_id": "user-1",
+            "agent_id": "agent-1",
+            "conversation_id": "conversation-1",
+            "datasource_id": 17,
+            **scope_overrides,
+        }
+        return StreamChatInput(
+            message="继续分析",
+            orchestrator_context={
+                "version": "nanzi-context/v1",
+                "original_query": "继续分析",
+                "standalone_question": "查询18日消耗；本轮补充或调整：继续分析",
+                "scope": scope,
+                "current_session": {"recent_messages": []},
+            },
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "scope_overrides",
+        [
+            {"user_id": "other-user"},
+            {"agent_id": "other-agent"},
+            {"datasource_id": 18},
+        ],
+    )
+    async def test_rejects_scope_not_matching_authenticated_identity(self, scope_overrides):
+        svc = _mock_svc_with_nodes()
+        svc.chat.stream_chat = MagicMock(side_effect=AssertionError("upstream invoked"))
+        ctx = MagicMock(user_id="user-1")
+        ctx.principal = {"agent_id": "agent-1", "datasource_id": "17"}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await stream_chat(self._request(**scope_overrides), svc, ctx, MagicMock())
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Request context does not match authenticated identity"
+        svc.chat.stream_chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accepts_scope_matching_authenticated_identity(self):
+        async def empty_stream(*_args, **_kwargs):
+            if False:
+                yield
+
+        svc = _mock_svc_with_nodes()
+        svc.chat.stream_chat = MagicMock(return_value=empty_stream())
+        ctx = MagicMock(user_id="user-1")
+        ctx.principal = {"agent_id": "agent-1", "datasource_id": "17"}
+
+        response = await stream_chat(self._request(), svc, ctx, MagicMock())
+        async for _ in response.body_iterator:
+            pass
+
+        svc.chat.stream_chat.assert_called_once()
+
+
 class TestStreamChatSqlPolicyPreCheck:
     """SQL policy enabled chat requests must carry required request principal fields."""
 

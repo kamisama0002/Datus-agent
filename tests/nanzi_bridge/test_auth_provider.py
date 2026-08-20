@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 
 import httpx
@@ -32,6 +33,8 @@ def _provider(http_transport: httpx.AsyncBaseTransport, **kwargs) -> NanziAuthPr
         request_for(omit={"authorization"}),
         request_for(omit={"x-nanzi-user-id"}),
         request_for(supplied_project_id="nzp_" + "0" * 32),
+        request_for(model_id="model id"),
+        request_for(model_id="模型"),
     ],
 )
 async def test_rejects_untrusted_or_inconsistent_requests_before_callback(incoming_request) -> None:
@@ -97,6 +100,44 @@ async def test_reuses_unexpired_fingerprint_and_evicts_once_after_change() -> No
     assert third.config is not first.config
     assert callback_calls == 2
     assert evicted == [project_id()]
+
+
+@pytest.mark.anyio
+async def test_selected_models_use_separate_runtime_projects_and_config_caches() -> None:
+    callback_models: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        model_id = request.headers["X-Nanzi-Model-Id"]
+        callback_models.append(model_id)
+        body = project_config(
+            fingerprint=hashlib.sha256(model_id.encode()).hexdigest()
+        )
+        body["model"]["model"] = model_id
+        return httpx.Response(200, json=body)
+
+    evicted: list[str] = []
+
+    async def on_evict(value: str) -> None:
+        evicted.append(value)
+
+    provider = _provider(httpx.MockTransport(handler))
+    provider.on_evict(on_evict)
+    deepseek = await provider.authenticate(
+        request_for(model_id="deepseek/deepseek-chat")
+    )
+    qwen = await provider.authenticate(request_for(model_id="qwen/qwen3-32b"))
+    deepseek_again = await provider.authenticate(
+        request_for(model_id="deepseek/deepseek-chat")
+    )
+
+    assert callback_models == ["deepseek/deepseek-chat", "qwen/qwen3-32b"]
+    assert deepseek.project_id != qwen.project_id
+    assert deepseek.project_id == deepseek_again.project_id
+    assert deepseek.config is deepseek_again.config
+    assert deepseek.config.session_dir == qwen.config.session_dir
+    assert deepseek.principal["model_id"] == "deepseek/deepseek-chat"
+    assert qwen.principal["model_id"] == "qwen/qwen3-32b"
+    assert evicted == []
 
 
 @pytest.mark.anyio
