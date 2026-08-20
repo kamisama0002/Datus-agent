@@ -6,7 +6,7 @@
       "id": 1,
       "event": "session",
       "data": {
-        "session_id": "nanzi-v1-session-0001",
+        "session_id": "nzs_2d0a3dae-581d-5e30-abc7-4ea3bc5e6553",
         "llm_session_id": null
       },
       "timestamp": "2026-08-14T00:00:00Z"
@@ -171,7 +171,7 @@
       "id": 7,
       "event": "usage",
       "data": {
-        "session_id": "nanzi-v1-session-0001",
+        "session_id": "nzs_2d0a3dae-581d-5e30-abc7-4ea3bc5e6553",
         "llm_session_id": null,
         "depth": 0,
         "parent_action_id": null,
@@ -198,7 +198,7 @@
       "id": 8,
       "event": "end",
       "data": {
-        "session_id": "nanzi-v1-session-0001",
+        "session_id": "nzs_2d0a3dae-581d-5e30-abc7-4ea3bc5e6553",
         "llm_session_id": null,
         "total_events": 8,
         "action_count": 4,

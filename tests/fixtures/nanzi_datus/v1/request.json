@@ -20,10 +20,42 @@
       "interactive": false,
       "max_turns": 30,
       "message": "Count completed orders",
+      "orchestrator_context": {
+        "version": "nanzi-context/v1",
+        "original_query": "Count completed orders",
+        "standalone_question": "Count completed orders",
+        "continuation": false,
+        "cross_session_recall": false,
+        "scope": {
+          "user_id": "user-23",
+          "agent_id": "agent-17",
+          "conversation_id": "conversation-fixture",
+          "datasource_id": 17
+        },
+        "current_session": {
+          "recent_messages": []
+        },
+        "recalled_sessions": [],
+        "semantic_context": [],
+        "recall_policy": {
+          "mode": "none",
+          "source": "model",
+          "requires_fresh_query": true
+        },
+        "response_policy": {
+          "mode": "concise",
+          "requested_aspects": []
+        },
+        "compression": {
+          "mode": "none",
+          "source_tokens": 120,
+          "output_tokens": 120
+        }
+      },
       "origin": "orchestrator",
       "plan_mode": false,
       "prompt_language": "en",
-      "session_id": "nanzi-v1-session-0001",
+      "session_id": "nzs_2d0a3dae-581d-5e30-abc7-4ea3bc5e6553",
       "stream_response": true
     }
   }

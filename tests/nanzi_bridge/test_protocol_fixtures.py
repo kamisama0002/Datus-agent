@@ -20,7 +20,7 @@ from tests.nanzi_bridge.conftest import project_config, runtime_project_id
 
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "nanzi_datus" / "v1"
-SESSION_ID = "nanzi-v1-session-0001"
+SESSION_ID = "nzs_2d0a3dae-581d-5e30-abc7-4ea3bc5e6553"
 MESSAGE_ID = "nanzi-v1-message-0001"
 FIXED_TIME = datetime(2026, 8, 14, tzinfo=timezone.utc)
 
@@ -237,6 +237,11 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert fixture["request"]["path"] == "/api/v1/chat/stream"
     assert body.model_dump(mode="json", exclude_none=True) == fixture["request"]["json"]
     assert body.session_id == SESSION_ID
+    assert body.orchestrator_context is not None
+    assert body.orchestrator_context.recall_policy.mode == "none"
+    assert body.orchestrator_context.recall_policy.requires_fresh_query is True
+    assert body.orchestrator_context.response_policy.mode == "concise"
+    assert body.orchestrator_context.compression.source_tokens == 120
     assert context.project_id == runtime_project_id("deepseek/deepseek-chat")
     assert context.user_id == "user-23"
     assert callback_requests[0].headers["X-Trace-Id"] == "trace-29"
