@@ -3,6 +3,6 @@
   "hash_algorithm": "sha256",
   "fixtures": {
     "request.json": "af951db67c7c2675f65957bb09d1be7594e1df32422b75dd61b5ffbd111be7b7",
-    "sse.json": "d8f388a07f46e624563212fee7c30a4ee889caeed26f7a5291a6fa1435a54029"
+    "sse.json": "ec437108bec62f237de4c0a4373cde0a8b347f49cdba6704b4fd76c35ffcef0d"
   }
 }

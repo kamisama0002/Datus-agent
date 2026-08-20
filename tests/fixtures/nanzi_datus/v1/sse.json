@@ -29,6 +29,10 @@
           ],
           "depth": 0,
           "parent_action_id": null,
+          "action_id": "thinking-1",
+          "action_type": "thinking_delta",
+          "action_status": "processing",
+          "duration_ms": null,
           "at_context": null
         }
       },
@@ -52,6 +56,10 @@
           ],
           "depth": 0,
           "parent_action_id": null,
+          "action_id": "thinking-2",
+          "action_type": "thinking_delta",
+          "action_status": "processing",
+          "duration_ms": null,
           "at_context": null
         }
       },
@@ -82,6 +90,10 @@
           ],
           "depth": 0,
           "parent_action_id": null,
+          "action_id": "response-1",
+          "action_type": "response",
+          "action_status": "success",
+          "duration_ms": null,
           "at_context": null
         }
       },
@@ -110,6 +122,10 @@
           ],
           "depth": 0,
           "parent_action_id": null,
+          "action_id": "nanzi-v1-tool-0001",
+          "action_type": "tool_call",
+          "action_status": "processing",
+          "duration_ms": null,
           "at_context": null
         }
       },
@@ -142,6 +158,10 @@
           ],
           "depth": 0,
           "parent_action_id": null,
+          "action_id": "complete_nanzi-v1-tool-0001",
+          "action_type": "tool_call",
+          "action_status": "success",
+          "duration_ms": 1000.0,
           "at_context": null
         }
       },
