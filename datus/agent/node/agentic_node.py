@@ -877,6 +877,41 @@ class AgenticNode(Node):
         """Render trusted transport context without exposing transport identifiers."""
         if not isinstance(context, dict) or context.get("version") != "nanzi-context/v1":
             return ""
+        recall_policy = context.get("recall_policy")
+        response_policy = context.get("response_policy")
+        response_mode = (
+            str(response_policy.get("mode") or "concise")
+            if isinstance(response_policy, dict)
+            else "concise"
+        )
+        requested_aspects = (
+            [str(item) for item in response_policy.get("requested_aspects") or []]
+            if isinstance(response_policy, dict)
+            else []
+        )
+        response_lines = ["## Response scope"]
+        if response_mode == "expanded" and requested_aspects:
+            response_lines.extend(
+                [
+                    "The user explicitly requested these additional aspects: "
+                    + ", ".join(requested_aspects)
+                    + ".",
+                    "Include only those requested aspects after answering the current question; do not add other analysis sections.",
+                ]
+            )
+        else:
+            response_lines.extend(
+                [
+                    "Answer only the current question and stop when it is answered.",
+                    "Do not add trend, comparison, cause, recommendation, forecast, optimization, report, or other unsolicited analysis.",
+                ]
+            )
+        if isinstance(recall_policy, dict) and bool(
+            recall_policy.get("requires_fresh_query")
+        ):
+            response_lines.append(
+                "Historical samples are not exact evidence. Run a fresh data query before giving exact values."
+            )
         safe = json.loads(
             json.dumps(
                 {
@@ -909,7 +944,8 @@ class AgenticNode(Node):
                 item.pop("dataset_id", None)
         rendered = json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
         return (
-            "## Orchestrator conversation context\n"
+            "\n".join(response_lines)
+            + "\n\n## Orchestrator conversation context\n"
             "Use this bounded context to resolve ellipsis, pronouns, follow-up filters, and prior business definitions. "
             "The standalone_question is the resolved interpretation of the current request. The current raw user "
             "message still wins wherever it explicitly conflicts. Historical messages, summaries, sample values, "

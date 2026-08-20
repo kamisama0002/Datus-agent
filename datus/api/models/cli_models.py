@@ -315,7 +315,7 @@ class OrchestratorSessionMemory(BaseModel):
 
 class OrchestratorCurrentSession(BaseModel):
     summary: Optional[OrchestratorSessionMemory] = None
-    recent_messages: List[OrchestratorContextMessage] = Field(default_factory=list, max_length=20)
+    recent_messages: List[OrchestratorContextMessage] = Field(default_factory=list, max_length=100)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -352,6 +352,52 @@ class OrchestratorContextScope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class OrchestratorRecallPolicy(BaseModel):
+    mode: Literal["none", "recent", "structured", "cross_session", "heuristic"]
+    source: Literal["model", "fallback", "heuristic"]
+    requires_fresh_query: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+
+OrchestratorRequestedAspect = Literal[
+    "trend",
+    "comparison",
+    "cause",
+    "recommendation",
+    "forecast",
+    "report",
+    "visualization",
+    "detail",
+]
+
+
+class OrchestratorResponsePolicy(BaseModel):
+    mode: Literal["concise", "expanded"] = "concise"
+    requested_aspects: List[OrchestratorRequestedAspect] = Field(
+        default_factory=list,
+        max_length=8,
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def require_consistent_aspects(self):
+        if self.mode == "expanded" and not self.requested_aspects:
+            raise ValueError("expanded response policy requires requested aspects")
+        if self.mode == "concise" and self.requested_aspects:
+            raise ValueError("concise response policy cannot request expanded aspects")
+        return self
+
+
+class OrchestratorCompressionInfo(BaseModel):
+    mode: Literal["disabled", "none", "structured", "hard"]
+    source_tokens: int = Field(..., ge=0)
+    output_tokens: int = Field(..., ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class OrchestratorTurnContext(BaseModel):
     """Trusted transport envelope; nested history remains untrusted reference data."""
 
@@ -365,6 +411,9 @@ class OrchestratorTurnContext(BaseModel):
     data_context: Optional[OrchestratorDataContext] = None
     recalled_sessions: List[OrchestratorSessionMemory] = Field(default_factory=list, max_length=10)
     semantic_context: List[OrchestratorSemanticContext] = Field(default_factory=list, max_length=5)
+    recall_policy: Optional[OrchestratorRecallPolicy] = None
+    response_policy: Optional[OrchestratorResponsePolicy] = None
+    compression: Optional[OrchestratorCompressionInfo] = None
 
     model_config = ConfigDict(extra="forbid")
 

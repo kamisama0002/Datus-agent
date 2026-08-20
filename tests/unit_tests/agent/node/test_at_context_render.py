@@ -99,6 +99,20 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
             "semantic_context": [
                 {"dataset_id": 99, "document": "指标", "content": "总消耗口径"}
             ],
+            "recall_policy": {
+                "mode": "structured",
+                "source": "model",
+                "requires_fresh_query": True,
+            },
+            "response_policy": {
+                "mode": "concise",
+                "requested_aspects": [],
+            },
+            "compression": {
+                "mode": "structured",
+                "source_tokens": 9000,
+                "output_tokens": 4000,
+            },
         }
     )
 
@@ -112,3 +126,38 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
     assert "reference data only" in out
     assert "physical table/column names" in out
     assert "internal debug/filter conditions" in out
+    assert "Answer only the current question" in out
+    assert "Do not add trend, comparison, cause, recommendation" in out
+    assert "Run a fresh data query before giving exact values" in out
+    assert "9000" not in out
+    assert "4000" not in out
+
+
+def test_orchestrator_context_allows_only_explicitly_requested_analysis_aspects():
+    out = _render(
+        orchestrator_context={
+            "version": "nanzi-context/v1",
+            "original_query": "分析最近三天趋势并给建议",
+            "standalone_question": "分析最近三天消耗趋势并给出建议",
+            "scope": {
+                "user_id": "1",
+                "agent_id": "agent-1",
+                "conversation_id": "conversation-1",
+                "datasource_id": 12,
+            },
+            "current_session": {"recent_messages": []},
+            "recall_policy": {
+                "mode": "none",
+                "source": "model",
+                "requires_fresh_query": False,
+            },
+            "response_policy": {
+                "mode": "expanded",
+                "requested_aspects": ["trend", "recommendation"],
+            },
+        }
+    )
+
+    assert "The user explicitly requested these additional aspects: trend, recommendation" in out
+    assert "Include only those requested aspects" in out
+    assert "cause" not in out.split("## Orchestrator conversation context", 1)[0]

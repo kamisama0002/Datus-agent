@@ -158,12 +158,90 @@ class TestStreamChatInputOrchestratorContext:
                 "data_context": None,
                 "recalled_sessions": [],
                 "semantic_context": [],
+                "recall_policy": {
+                    "mode": "structured",
+                    "source": "model",
+                    "requires_fresh_query": True,
+                },
+                "response_policy": {
+                    "mode": "concise",
+                    "requested_aspects": [],
+                },
+                "compression": {
+                    "mode": "structured",
+                    "source_tokens": 9000,
+                    "output_tokens": 4000,
+                },
             },
         )
 
         assert obj.orchestrator_context is not None
         assert obj.orchestrator_context.standalone_question == "查询17日总消耗"
         assert len(obj.orchestrator_context.current_session.recent_messages) == 2
+        assert obj.orchestrator_context.recall_policy.requires_fresh_query is True
+        assert obj.orchestrator_context.response_policy.mode == "concise"
+        assert obj.orchestrator_context.compression.output_tokens == 4000
+
+    def test_accepts_up_to_shared_history_limit_within_transport_budget(self):
+        obj = StreamChatInput(
+            message="继续",
+            orchestrator_context={
+                "version": "nanzi-context/v1",
+                "original_query": "继续",
+                "standalone_question": "继续分析",
+                "scope": {
+                    "user_id": "1",
+                    "agent_id": "agent-1",
+                    "conversation_id": "conversation-1",
+                    "datasource_id": 12,
+                },
+                "current_session": {
+                    "recent_messages": [
+                        {"role": "user", "content": f"短消息{index}"}
+                        for index in range(100)
+                    ]
+                },
+            },
+        )
+
+        assert len(obj.orchestrator_context.current_session.recent_messages) == 100
+
+    @pytest.mark.parametrize(
+        "policy",
+        [
+            {"recall_policy": {"mode": "everything", "source": "model"}},
+            {
+                "response_policy": {
+                    "mode": "expanded",
+                    "requested_aspects": ["secret_reasoning"],
+                }
+            },
+            {
+                "compression": {
+                    "mode": "magic",
+                    "source_tokens": 10,
+                    "output_tokens": 5,
+                }
+            },
+        ],
+    )
+    def test_rejects_unknown_orchestrator_policy_values(self, policy):
+        context = {
+            "version": "nanzi-context/v1",
+            "original_query": "hi",
+            "standalone_question": "hi",
+            "scope": {
+                "user_id": "1",
+                "agent_id": "agent-1",
+                "conversation_id": "conversation-1",
+                "datasource_id": 12,
+            },
+            "current_session": {"recent_messages": []},
+            **policy,
+        }
+
+        with pytest.raises(ValidationError):
+            StreamChatInput(message="hi", orchestrator_context=context)
 
     def test_rejects_unknown_or_oversized_context(self):
         with pytest.raises(ValidationError):
