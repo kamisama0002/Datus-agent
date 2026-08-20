@@ -110,3 +110,5 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
     assert "result-secret" not in out
     assert "agent-secret" not in out
     assert "reference data only" in out
+    assert "physical table/column names" in out
+    assert "internal debug/filter conditions" in out
