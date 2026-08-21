@@ -80,7 +80,7 @@ class TestLoadProjectOverride:
         assert result.language == "zh"
         assert result.target is None
 
-    @pytest.mark.parametrize("value", ["off", "minimal", "low", "medium", "high", "xhigh"])
+    @pytest.mark.parametrize("value", ["off", "minimal", "low", "medium", "high", "xhigh", "max"])
     def test_parse_reasoning_effort_field(self, tmp_path, value):
         path = tmp_path / PROJECT_CONFIG_REL
         path.parent.mkdir(parents=True)

@@ -10,9 +10,9 @@
       "X-Nanzi-Agent-Id": "agent-17",
       "X-Nanzi-Datasource-Id": "17",
       "X-Nanzi-Datus-Protocol": "nanzi-datus/v1",
-      "X-Nanzi-Model-Id": "deepseek/deepseek-chat",
+      "X-Nanzi-Model-Id": "deepseek-v4-pro",
       "X-Nanzi-Project-Id": "nzp_9f8e085f833cf974eb9e28402b720829",
-      "X-Nanzi-Reasoning-Effort": "xhigh",
+      "X-Nanzi-Reasoning-Effort": "max",
       "X-Nanzi-Thinking-Enable": "true",
       "X-Nanzi-Trace-Id": "trace-29",
       "X-Nanzi-User-Id": "user-23"

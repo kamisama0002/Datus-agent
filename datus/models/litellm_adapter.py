@@ -209,7 +209,7 @@ class LiteLLMAdapter:
             api_key: API key for the provider
             base_url: Optional custom base URL (overrides default)
             enable_thinking: Legacy bool switch; True is equivalent to reasoning_effort="medium".
-            reasoning_effort: One of off|minimal|low|medium|high. Takes precedence
+            reasoning_effort: One of off|minimal|low|medium|high|xhigh|max. Takes precedence
                 over ``enable_thinking`` when set; ``None`` defers to the bool.
             default_headers: Optional custom HTTP headers (e.g., User-Agent for Coding Plan endpoints)
         """
@@ -506,7 +506,7 @@ def create_litellm_adapter(
         api_key: API key for the provider
         base_url: Optional custom base URL
         enable_thinking: Legacy bool switch; True is equivalent to reasoning_effort="medium".
-        reasoning_effort: One of off|minimal|low|medium|high; takes precedence
+        reasoning_effort: One of off|minimal|low|medium|high|xhigh|max; takes precedence
             over ``enable_thinking`` when set.
         default_headers: Optional custom HTTP headers
 

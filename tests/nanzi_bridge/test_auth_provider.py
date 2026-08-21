@@ -169,6 +169,13 @@ async def test_same_model_reasoning_levels_use_separate_runtime_caches() -> None
             reasoning_effort="high",
         )
     )
+    maximum = await provider.authenticate(
+        request_for(
+            model_id="gpt-5.5",
+            thinking_enable=True,
+            reasoning_effort="max",
+        )
+    )
     low_again = await provider.authenticate(
         request_for(
             model_id="gpt-5.5",
@@ -177,12 +184,14 @@ async def test_same_model_reasoning_levels_use_separate_runtime_caches() -> None
         )
     )
 
-    assert callback_levels == ["low", "high"]
+    assert callback_levels == ["low", "high", "max"]
     assert low.project_id != high.project_id
+    assert maximum.project_id not in {low.project_id, high.project_id}
     assert low.project_id == low_again.project_id
     assert low.config is low_again.config
     assert low.config.active_model().reasoning_effort == "low"
     assert high.config.active_model().reasoning_effort == "high"
+    assert maximum.config.active_model().reasoning_effort == "max"
 
 
 @pytest.mark.anyio

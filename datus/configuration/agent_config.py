@@ -414,7 +414,7 @@ class ModelConfig:
     base_url: Optional[str] = None
     save_llm_trace: bool = False
     enable_thinking: bool = False  # Legacy bool switch; True is equivalent to reasoning_effort="medium".
-    # Reasoning depth for thinking-capable models. Values: off|minimal|low|medium|high.
+    # Reasoning depth for thinking-capable models. Values: off|minimal|low|medium|high|xhigh|max.
     # None defers to enable_thinking; LiteLLM maps the level to each vendor's dialect.
     reasoning_effort: Optional[str] = None
     strict_json_schema: bool = True  # Enable strict JSON schema mode for structured output

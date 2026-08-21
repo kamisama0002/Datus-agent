@@ -1079,7 +1079,12 @@ class OpenAICompatibleModel(LLMBaseModel):
         effort = self.litellm_adapter.reasoning_effort_level
         if effort:
             if self._model_supports_reasoning():
-                model_settings_kwargs["reasoning"] = Reasoning(effort=effort)
+                # The portable Agents SDK enum currently stops at ``xhigh``.
+                # DeepSeek V4 exposes a provider-native ``max`` effort, which
+                # is preserved below in extra_body while the SDK receives its
+                # highest compatible value.
+                sdk_effort = "xhigh" if effort == "max" else effort
+                model_settings_kwargs["reasoning"] = Reasoning(effort=sdk_effort)
                 logger.debug(f"Enabled reasoning (effort={effort}) for model: {self.model_name}")
                 native_thinking = self._native_thinking_extra_body()
                 if native_thinking:

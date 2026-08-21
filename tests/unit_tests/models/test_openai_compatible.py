@@ -1884,6 +1884,20 @@ class TestBuildAgent:
             "reasoning_effort": "high",
         }
 
+    def test_deepseek_v4_max_effort_is_sent_without_downgrade(self):
+        cfg = _make_model_config(model="deepseek-v4-pro", model_type="deepseek")
+        model = _make_model(cfg)
+        model.litellm_adapter.provider = "deepseek"
+        model.litellm_adapter.reasoning_effort_level = "max"
+
+        with patch("datus.models.openai_compatible.litellm.supports_reasoning", return_value=False):
+            _, call_args = self._call_build_agent(model)
+
+        assert call_args[1]["model_settings"].extra_args["extra_body"] == {
+            "thinking": {"type": "enabled"},
+            "reasoning_effort": "max",
+        }
+
     @pytest.mark.parametrize("model_name", ["kimi-k2.6", "kimi-k2.5", "kimi-k2-thinking"])
     def test_kimi_extra_body_only_carries_thinking(self, model_name):
         """Moonshot's API does not accept ``reasoning_effort``; sending it

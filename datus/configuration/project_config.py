@@ -92,7 +92,7 @@ ALLOWED_KEYS = frozenset(
     }
 )
 REASONING_EFFORT_CHOICES = frozenset(
-    {"off", "minimal", "low", "medium", "high", "xhigh"}
+    {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 )
 
 

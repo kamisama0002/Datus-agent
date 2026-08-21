@@ -33,7 +33,7 @@ _MODEL_FIELDS = _MODEL_REQUIRED_FIELDS | {
     "enable_thinking",
     "reasoning_effort",
 }
-_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh"})
+_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 _MCP_FIELDS = {"server_name", "url"}
 _SKILL_FIELDS = {"id", "content_sha256"}
 _QUERY_LIMITS = {

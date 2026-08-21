@@ -201,7 +201,7 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
         callback_requests.append(request)
         payload = project_config()
         payload["model"]["enable_thinking"] = True
-        payload["model"]["reasoning_effort"] = "xhigh"
+        payload["model"]["reasoning_effort"] = "max"
         return httpx.Response(200, json=payload)
 
     assert fixture["protocol"] == NANZI_DATUS_PROTOCOL
@@ -248,18 +248,18 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert body.orchestrator_context.response_policy.mode == "concise"
     assert body.orchestrator_context.compression.source_tokens == 120
     assert context.project_id == runtime_project_id(
-        "deepseek/deepseek-chat",
+        "deepseek-v4-pro",
         thinking_enable=True,
-        reasoning_effort="xhigh",
+        reasoning_effort="max",
     )
     assert context.user_id == "user-23"
     assert context.config.active_model().enable_thinking is True
-    assert context.config.active_model().reasoning_effort == "xhigh"
+    assert context.config.active_model().reasoning_effort == "max"
     assert callback_requests[0].headers["X-Trace-Id"] == "trace-29"
     assert callback_requests[0].headers["X-Nanzi-Datus-Protocol"] == NANZI_DATUS_PROTOCOL
-    assert callback_requests[0].headers["X-Nanzi-Model-Id"] == "deepseek/deepseek-chat"
+    assert callback_requests[0].headers["X-Nanzi-Model-Id"] == "deepseek-v4-pro"
     assert callback_requests[0].headers["X-Nanzi-Thinking-Enable"] == "true"
-    assert callback_requests[0].headers["X-Nanzi-Reasoning-Effort"] == "xhigh"
+    assert callback_requests[0].headers["X-Nanzi-Reasoning-Effort"] == "max"
 
 
 def test_sse_fixture_is_exact_converter_and_dto_wire_contract() -> None:

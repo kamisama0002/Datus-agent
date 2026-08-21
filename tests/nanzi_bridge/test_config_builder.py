@@ -70,13 +70,13 @@ def test_native_model_factory_constructs_openai_model(tmp_path) -> None:
 def test_builds_effective_reasoning_settings_into_active_model(tmp_path) -> None:
     body = project_config()
     body["model"]["enable_thinking"] = True
-    body["model"]["reasoning_effort"] = "xhigh"
+    body["model"]["reasoning_effort"] = "max"
 
     config = NanziConfigBuilder(home=str(tmp_path / "runtime-home")).build_agent_config(body)
 
     active = config.active_model()
     assert active.enable_thinking is True
-    assert active.reasoning_effort == "xhigh"
+    assert active.reasoning_effort == "max"
 
 
 def test_runtime_clone_preserves_immutable_sidecars(tmp_path) -> None:

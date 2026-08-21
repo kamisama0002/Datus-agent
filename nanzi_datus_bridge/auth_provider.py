@@ -36,7 +36,7 @@ _PROJECT_ID = re.compile(r"^nzp_[0-9a-f]{32}$")
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,254}$")
 _RUNTIME_PROJECT_DOMAIN = b"nanzi-datus-model-runtime-v1\0"
 _RUNTIME_REASONING_DOMAIN = b"nanzi-datus-reasoning-runtime-v1\0"
-_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh"})
+_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 
 
 class NanziBridgeError(DatusException):
