@@ -293,6 +293,8 @@ class OrchestratorContextMessage(BaseModel):
 
     role: Literal["user", "assistant"]
     content: str = Field(..., min_length=1, max_length=1200)
+    sequence: int = Field(default=0, ge=0)
+    timestamp: str = Field(default="", max_length=80)
 
     model_config = ConfigDict(extra="forbid")
 

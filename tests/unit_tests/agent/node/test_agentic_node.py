@@ -103,7 +103,7 @@ class TestOrchestratorVisualizationPolicy:
     def _tool(name: str) -> SimpleNamespace:
         return SimpleNamespace(name=name)
 
-    def test_disallowed_turn_filters_only_render_tools_without_mutating_node_tools(self):
+    def test_main_model_keeps_all_business_tools_and_decides_from_current_turn(self):
         tools = [
             self._tool("mcp__nanzi_mcp__flint_chart__render_chart"),
             self._tool("read_query"),
@@ -118,7 +118,11 @@ class TestOrchestratorVisualizationPolicy:
 
         filtered = AgenticNode._tools_for_orchestrator_policy(user_input, tools)
 
-        assert [tool.name for tool in filtered] == ["read_query", "describe_chart_metadata"]
+        assert [tool.name for tool in filtered] == [
+            "mcp__nanzi_mcp__flint_chart__render_chart",
+            "read_query",
+            "describe_chart_metadata",
+        ]
         assert [tool.name for tool in tools] == [
             "mcp__nanzi_mcp__flint_chart__render_chart",
             "read_query",

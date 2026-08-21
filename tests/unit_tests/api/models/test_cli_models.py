@@ -151,8 +151,8 @@ class TestStreamChatInputOrchestratorContext:
                 "current_session": {
                     "summary": None,
                     "recent_messages": [
-                        {"role": "user", "content": "查询18日总消耗"},
-                        {"role": "assistant", "content": "18日总消耗为100元"},
+                        {"role": "user", "content": "查询18日总消耗", "sequence": 1, "timestamp": "2026-08-21T09:00:00+08:00"},
+                        {"role": "assistant", "content": "18日总消耗为100元", "sequence": 2, "timestamp": "2026-08-21T09:01:00+08:00"},
                     ],
                 },
                 "data_context": None,
@@ -178,6 +178,7 @@ class TestStreamChatInputOrchestratorContext:
         assert obj.orchestrator_context is not None
         assert obj.orchestrator_context.standalone_question == "查询17日总消耗"
         assert len(obj.orchestrator_context.current_session.recent_messages) == 2
+        assert obj.orchestrator_context.current_session.recent_messages[1].sequence == 2
         assert obj.orchestrator_context.recall_policy.requires_fresh_query is True
         assert obj.orchestrator_context.response_policy.mode == "concise"
         assert obj.orchestrator_context.compression.output_tokens == 4000

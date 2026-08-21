@@ -90,7 +90,7 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
             },
             "current_session": {
                 "summary": {"conversation_id": "conversation-secret", "summary": "18日消耗分析"},
-                "recent_messages": [{"role": "user", "content": "查询18日总消耗"}],
+                "recent_messages": [{"role": "user", "content": "查询18日总消耗", "sequence": 1, "timestamp": "2026-08-21T09:00:00+08:00"}],
             },
             "data_context": {"result_id": "result-secret", "data_source": "datus:12", "row_count": 1},
             "recalled_sessions": [
@@ -129,6 +129,8 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
     assert "Answer only the current question" in out
     assert "Do not add trend, comparison, cause, recommendation" in out
     assert "Run a fresh data query before giving exact values" in out
+    assert "chronological timeline" in out
+    assert "decide the next action and tools" in out.lower()
     assert "9000" not in out
     assert "4000" not in out
 
