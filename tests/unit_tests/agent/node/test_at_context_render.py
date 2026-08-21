@@ -131,6 +131,8 @@ def test_orchestrator_context_renders_resolved_question_without_transport_ids():
     assert "Run a fresh data query before giving exact values" in out
     assert "chronological timeline" in out
     assert "decide the next action and tools" in out.lower()
+    assert "single scoped data query" in out
+    assert "multiple independent workstreams" in out
     assert "9000" not in out
     assert "4000" not in out
 
