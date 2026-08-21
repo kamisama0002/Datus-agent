@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from datus.utils.time_utils import now_utc_iso
 
 
+MAX_ORCHESTRATOR_CONTEXT_BYTES = 8 * 1024 * 1024
+
+
 # SQL Execution models
 class ExecuteSQLInput(BaseModel):
     """Input model for SQL execution."""
@@ -423,8 +426,8 @@ class OrchestratorTurnContext(BaseModel):
     @model_validator(mode="after")
     def reject_oversized_context(self):
         encoded = json.dumps(self.model_dump(mode="json"), ensure_ascii=False)
-        if len(encoded) > 64 * 1024:
-            raise ValueError("orchestrator_context exceeds 64 KiB")
+        if len(encoded.encode("utf-8")) > MAX_ORCHESTRATOR_CONTEXT_BYTES:
+            raise ValueError("orchestrator_context exceeds 8 MiB")
         return self
 
 

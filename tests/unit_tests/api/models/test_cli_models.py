@@ -198,7 +198,11 @@ class TestStreamChatInputOrchestratorContext:
                 },
                 "current_session": {
                     "recent_messages": [
-                        {"role": "user", "content": f"短消息{index}"}
+                        {
+                            "role": "user",
+                            "content": f"消息{index}-" + ("数" * 950),
+                            "sequence": index + 1,
+                        }
                         for index in range(100)
                     ]
                 },
