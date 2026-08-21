@@ -21,10 +21,24 @@ def project_id(agent_id: str = "agent-17", datasource_id: str = "17") -> str:
     return f"nzp_{digest[:32]}"
 
 
-def runtime_project_id(model_id: str) -> str:
-    digest = hashlib.sha256(
-        b"nanzi-datus-model-runtime-v1\0" + model_id.encode("ascii")
-    ).hexdigest()
+def runtime_project_id(
+    model_id: str,
+    *,
+    thinking_enable: bool | None = None,
+    reasoning_effort: str | None = None,
+) -> str:
+    if thinking_enable is None and reasoning_effort is None:
+        material = b"nanzi-datus-model-runtime-v1\0" + model_id.encode("ascii")
+    else:
+        material = (
+            b"nanzi-datus-reasoning-runtime-v1\0"
+            + model_id.encode("ascii")
+            + b"\0"
+            + str(bool(thinking_enable)).lower().encode("ascii")
+            + b"\0"
+            + str(reasoning_effort or "").encode("ascii")
+        )
+    digest = hashlib.sha256(material).hexdigest()
     return f"{project_id()}_m_{digest[:32]}"
 
 

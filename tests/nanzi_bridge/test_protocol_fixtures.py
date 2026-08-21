@@ -199,7 +199,10 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
 
     async def callback(request: httpx.Request) -> httpx.Response:
         callback_requests.append(request)
-        return httpx.Response(200, json=project_config())
+        payload = project_config()
+        payload["model"]["enable_thinking"] = True
+        payload["model"]["reasoning_effort"] = "xhigh"
+        return httpx.Response(200, json=payload)
 
     assert fixture["protocol"] == NANZI_DATUS_PROTOCOL
     assert set(fixture["request"]["headers"]) == {
@@ -211,6 +214,8 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
         "X-Nanzi-Datus-Protocol",
         "X-Nanzi-Model-Id",
         "X-Nanzi-Project-Id",
+        "X-Nanzi-Reasoning-Effort",
+        "X-Nanzi-Thinking-Enable",
         "X-Nanzi-Trace-Id",
         "X-Nanzi-User-Id",
     }
@@ -242,11 +247,19 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert body.orchestrator_context.recall_policy.requires_fresh_query is True
     assert body.orchestrator_context.response_policy.mode == "concise"
     assert body.orchestrator_context.compression.source_tokens == 120
-    assert context.project_id == runtime_project_id("deepseek/deepseek-chat")
+    assert context.project_id == runtime_project_id(
+        "deepseek/deepseek-chat",
+        thinking_enable=True,
+        reasoning_effort="xhigh",
+    )
     assert context.user_id == "user-23"
+    assert context.config.active_model().enable_thinking is True
+    assert context.config.active_model().reasoning_effort == "xhigh"
     assert callback_requests[0].headers["X-Trace-Id"] == "trace-29"
     assert callback_requests[0].headers["X-Nanzi-Datus-Protocol"] == NANZI_DATUS_PROTOCOL
     assert callback_requests[0].headers["X-Nanzi-Model-Id"] == "deepseek/deepseek-chat"
+    assert callback_requests[0].headers["X-Nanzi-Thinking-Enable"] == "true"
+    assert callback_requests[0].headers["X-Nanzi-Reasoning-Effort"] == "xhigh"
 
 
 def test_sse_fixture_is_exact_converter_and_dto_wire_contract() -> None:
