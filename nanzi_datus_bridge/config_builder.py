@@ -34,6 +34,7 @@ _MODEL_FIELDS = _MODEL_REQUIRED_FIELDS | {
     "reasoning_effort",
 }
 _REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
+_MODEL_TYPES = frozenset({"openai", "deepseek"})
 _MCP_FIELDS = {"server_name", "url"}
 _SKILL_FIELDS = {"id", "content_sha256"}
 _QUERY_LIMITS = {
@@ -65,7 +66,7 @@ _BLOCKED_HEADERS = frozenset(
 class NanziModelDTO:
     """Exact model object accepted in NanZi's v1 callback response."""
 
-    type: Literal["openai"]
+    type: Literal["openai", "deepseek"]
     model: str
     api_key: str = field(repr=False)
     base_url: str
@@ -74,7 +75,7 @@ class NanziModelDTO:
     reasoning_effort: str = "off"
 
     def __post_init__(self) -> None:
-        if self.type != "openai" or not all((self.model.strip(), self.api_key.strip(), self.base_url.strip())):
+        if self.type not in _MODEL_TYPES or not all((self.model.strip(), self.api_key.strip(), self.base_url.strip())):
             raise NanziConfigError()
         object.__setattr__(
             self,
@@ -343,7 +344,7 @@ class NanziConfigBuilder:
         ):
             raise NanziConfigError()
         model = dict(model)
-        if model["type"] != "openai" or not all(
+        if model["type"] not in _MODEL_TYPES or not all(
             isinstance(model[field], str) and bool(model[field].strip())
             for field in _MODEL_REQUIRED_FIELDS
         ):

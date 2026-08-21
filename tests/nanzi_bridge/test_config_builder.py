@@ -7,6 +7,7 @@ import pytest
 
 from datus.api.services.chat_task_manager import _clone_agent_config
 from datus.models.base import LLMBaseModel
+from datus.models.deepseek_model import DeepSeekModel
 from datus.models.openai_model import OpenAIModel
 from datus.tools.permission.permission_manager import PermissionManager
 from datus.tools.permission.profile_override import apply_profile_override
@@ -65,6 +66,25 @@ def test_native_model_factory_constructs_openai_model(tmp_path) -> None:
     model = LLMBaseModel.create_model(config)
 
     assert isinstance(model, OpenAIModel)
+
+
+def test_native_model_factory_preserves_deepseek_provider(tmp_path) -> None:
+    body = project_config()
+    body["model"].update(
+        {
+            "type": "deepseek",
+            "model": "deepseek-v4-pro",
+            "enable_thinking": True,
+            "reasoning_effort": "max",
+        }
+    )
+
+    config = NanziConfigBuilder(home=str(tmp_path / "runtime-home")).build_agent_config(body)
+    model = LLMBaseModel.create_model(config)
+
+    assert config.active_model().type == "deepseek"
+    assert isinstance(model, DeepSeekModel)
+    assert model.litellm_adapter.provider == "deepseek"
 
 
 def test_builds_effective_reasoning_settings_into_active_model(tmp_path) -> None:

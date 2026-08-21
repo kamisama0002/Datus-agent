@@ -200,6 +200,8 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     async def callback(request: httpx.Request) -> httpx.Response:
         callback_requests.append(request)
         payload = project_config()
+        payload["model"]["type"] = "deepseek"
+        payload["model"]["model"] = "deepseek-v4-pro"
         payload["model"]["enable_thinking"] = True
         payload["model"]["reasoning_effort"] = "max"
         return httpx.Response(200, json=payload)
@@ -255,6 +257,7 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert context.user_id == "user-23"
     assert context.config.active_model().enable_thinking is True
     assert context.config.active_model().reasoning_effort == "max"
+    assert context.config.active_model().type == "deepseek"
     assert callback_requests[0].headers["X-Trace-Id"] == "trace-29"
     assert callback_requests[0].headers["X-Nanzi-Datus-Protocol"] == NANZI_DATUS_PROTOCOL
     assert callback_requests[0].headers["X-Nanzi-Model-Id"] == "deepseek-v4-pro"
