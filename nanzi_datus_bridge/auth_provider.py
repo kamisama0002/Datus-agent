@@ -35,6 +35,8 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _PROJECT_ID = re.compile(r"^nzp_[0-9a-f]{32}$")
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,254}$")
 _RUNTIME_PROJECT_DOMAIN = b"nanzi-datus-model-runtime-v1\0"
+_RUNTIME_REASONING_DOMAIN = b"nanzi-datus-reasoning-runtime-v1\0"
+_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh"})
 
 
 class NanziBridgeError(DatusException):
@@ -60,6 +62,8 @@ class _Identity:
     datasource_id: str
     trace_id: str
     model_id: str | None
+    thinking_enable: bool | None
+    reasoning_effort: str | None
 
 
 @dataclass(frozen=True)
@@ -157,6 +161,8 @@ class NanziAuthProvider:
                     datasource_id=identity.datasource_id,
                     trace_id=identity.trace_id,
                     model_id=identity.model_id,
+                    thinking_enable=identity.thinking_enable,
+                    reasoning_effort=identity.reasoning_effort,
                 )
                 config = self._builder.build_agent_config(
                     payload,
@@ -233,10 +239,39 @@ class NanziAuthProvider:
         model_id = request.headers.get("X-Nanzi-Model-Id")
         if model_id is not None and not _MODEL_ID.fullmatch(model_id):
             self._authentication_error()
+        thinking_header = request.headers.get("X-Nanzi-Thinking-Enable")
+        if thinking_header is None:
+            thinking_enable = None
+        elif thinking_header == "true":
+            thinking_enable = True
+        elif thinking_header == "false":
+            thinking_enable = False
+        else:
+            self._authentication_error()
+        reasoning_effort = request.headers.get("X-Nanzi-Reasoning-Effort")
+        if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
+            self._authentication_error()
+        if (
+            thinking_enable is False
+            and reasoning_effort not in {None, "off"}
+        ) or (
+            thinking_enable is True
+            and reasoning_effort == "off"
+        ):
+            self._authentication_error()
         expected_project_id = self._build_project_id(agent_id, datasource_id)
         if not hmac.compare_digest(project_id.encode("ascii"), expected_project_id.encode("ascii")):
             self._authentication_error("NanZi project identity is invalid")
-        return _Identity(project_id, user_id, agent_id, datasource_id, trace_id, model_id)
+        return _Identity(
+            project_id,
+            user_id,
+            agent_id,
+            datasource_id,
+            trace_id,
+            model_id,
+            thinking_enable,
+            reasoning_effort,
+        )
 
     @staticmethod
     def _required_header(request: Request, name: str, pattern: re.Pattern[str]) -> str:
@@ -256,9 +291,18 @@ class NanziAuthProvider:
             return identity.project_id
         # Keep model-specific services isolated while AgentConfig.project_name
         # continues to point at the shared NanZi session directory.
-        digest = hashlib.sha256(
-            _RUNTIME_PROJECT_DOMAIN + identity.model_id.encode("ascii")
-        ).hexdigest()[:32]
+        if identity.thinking_enable is None and identity.reasoning_effort is None:
+            material = _RUNTIME_PROJECT_DOMAIN + identity.model_id.encode("ascii")
+        else:
+            material = (
+                _RUNTIME_REASONING_DOMAIN
+                + identity.model_id.encode("ascii")
+                + b"\0"
+                + str(bool(identity.thinking_enable)).lower().encode("ascii")
+                + b"\0"
+                + str(identity.reasoning_effort or "").encode("ascii")
+            )
+        digest = hashlib.sha256(material).hexdigest()[:32]
         return f"{identity.project_id}_m_{digest}"
 
     @staticmethod
@@ -286,6 +330,10 @@ class NanziAuthProvider:
         }
         if identity.model_id is not None:
             principal["model_id"] = identity.model_id
+        if identity.thinking_enable is not None:
+            principal["thinking_enable"] = identity.thinking_enable
+        if identity.reasoning_effort is not None:
+            principal["reasoning_effort"] = identity.reasoning_effort
         return AppContext(
             user_id=identity.user_id,
             project_id=runtime_project_id,

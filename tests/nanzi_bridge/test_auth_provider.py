@@ -141,6 +141,51 @@ async def test_selected_models_use_separate_runtime_projects_and_config_caches()
 
 
 @pytest.mark.anyio
+async def test_same_model_reasoning_levels_use_separate_runtime_caches() -> None:
+    callback_levels: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        level = request.headers["X-Nanzi-Reasoning-Effort"]
+        callback_levels.append(level)
+        body = project_config(
+            fingerprint=hashlib.sha256(level.encode()).hexdigest()
+        )
+        body["model"]["enable_thinking"] = True
+        body["model"]["reasoning_effort"] = level
+        return httpx.Response(200, json=body)
+
+    provider = _provider(httpx.MockTransport(handler))
+    low = await provider.authenticate(
+        request_for(
+            model_id="gpt-5.5",
+            thinking_enable=True,
+            reasoning_effort="low",
+        )
+    )
+    high = await provider.authenticate(
+        request_for(
+            model_id="gpt-5.5",
+            thinking_enable=True,
+            reasoning_effort="high",
+        )
+    )
+    low_again = await provider.authenticate(
+        request_for(
+            model_id="gpt-5.5",
+            thinking_enable=True,
+            reasoning_effort="low",
+        )
+    )
+
+    assert callback_levels == ["low", "high"]
+    assert low.project_id != high.project_id
+    assert low.project_id == low_again.project_id
+    assert low.config is low_again.config
+    assert low.config.active_model().reasoning_effort == "low"
+    assert high.config.active_model().reasoning_effort == "high"
+
+
+@pytest.mark.anyio
 async def test_same_fingerprint_with_different_payload_fails_closed() -> None:
     now = [100.0]
     responses = [project_config(), project_config(password="changed-without-new-fingerprint")]

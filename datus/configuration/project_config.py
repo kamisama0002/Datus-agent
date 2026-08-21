@@ -91,7 +91,9 @@ ALLOWED_KEYS = frozenset(
         "sandbox",
     }
 )
-REASONING_EFFORT_CHOICES = frozenset({"off", "minimal", "low", "medium", "high"})
+REASONING_EFFORT_CHOICES = frozenset(
+    {"off", "minimal", "low", "medium", "high", "xhigh"}
+)
 
 
 @dataclass

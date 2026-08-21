@@ -37,6 +37,8 @@ def request_for(
     user_id: str = "user-23",
     trace_id: str = "trace-29",
     model_id: str | None = None,
+    thinking_enable: bool | None = None,
+    reasoning_effort: str | None = None,
     supplied_project_id: str | None = None,
     omit: set[str] | None = None,
 ) -> Request:
@@ -51,6 +53,10 @@ def request_for(
     }
     if model_id is not None:
         values["x-nanzi-model-id"] = model_id
+    if thinking_enable is not None:
+        values["x-nanzi-thinking-enable"] = "true" if thinking_enable else "false"
+    if reasoning_effort is not None:
+        values["x-nanzi-reasoning-effort"] = reasoning_effort
     omitted = omit or set()
     headers = [(name.encode("ascii"), value.encode("utf-8")) for name, value in values.items() if name not in omitted]
     return Request({"type": "http", "method": "POST", "path": "/api/v1/chat/stream", "headers": headers})
@@ -85,6 +91,8 @@ def project_config(
             "default_headers": {
                 "x-openai-actor-authorization": "local-image-extension",
             },
+            "enable_thinking": False,
+            "reasoning_effort": "off",
         },
         "config_mutable": False,
         "bash": {"enabled": False},

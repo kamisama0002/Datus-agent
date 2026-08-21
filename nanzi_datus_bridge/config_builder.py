@@ -28,7 +28,12 @@ _TOP_LEVEL_FIELDS = {
 _OPTIONAL_TOP_LEVEL_FIELDS = {"mcp"}
 _DATASOURCE_FIELDS = {"id", "type", "host", "port", "username", "password", "database"}
 _MODEL_REQUIRED_FIELDS = {"type", "model", "api_key", "base_url"}
-_MODEL_FIELDS = _MODEL_REQUIRED_FIELDS | {"default_headers"}
+_MODEL_FIELDS = _MODEL_REQUIRED_FIELDS | {
+    "default_headers",
+    "enable_thinking",
+    "reasoning_effort",
+}
+_REASONING_EFFORTS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh"})
 _MCP_FIELDS = {"server_name", "url"}
 _SKILL_FIELDS = {"id", "content_sha256"}
 _QUERY_LIMITS = {
@@ -65,6 +70,8 @@ class NanziModelDTO:
     api_key: str = field(repr=False)
     base_url: str
     default_headers: Mapping[str, str] = field(default_factory=dict, repr=False)
+    enable_thinking: bool = False
+    reasoning_effort: str = "off"
 
     def __post_init__(self) -> None:
         if self.type != "openai" or not all((self.model.strip(), self.api_key.strip(), self.base_url.strip())):
@@ -74,6 +81,14 @@ class NanziModelDTO:
             "default_headers",
             MappingProxyType(_normalize_default_headers(self.default_headers)),
         )
+        if not isinstance(self.enable_thinking, bool):
+            raise NanziConfigError()
+        if self.reasoning_effort not in _REASONING_EFFORTS:
+            raise NanziConfigError()
+        if self.reasoning_effort == "off" and self.enable_thinking:
+            raise NanziConfigError()
+        if self.reasoning_effort != "off" and not self.enable_thinking:
+            raise NanziConfigError()
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +208,8 @@ class NanziConfigBuilder:
                     "api_key": model.api_key,
                     "base_url": model.base_url,
                     "default_headers": dict(model.default_headers),
+                    "enable_thinking": model.enable_thinking,
+                    "reasoning_effort": model.reasoning_effort,
                 }
             },
             "sql_policy": {
@@ -337,6 +354,8 @@ class NanziConfigBuilder:
             api_key=model["api_key"],
             base_url=model["base_url"],
             default_headers=model.get("default_headers", {}),
+            enable_thinking=model.get("enable_thinking", False),
+            reasoning_effort=model.get("reasoning_effort", "off"),
         )
         mcp = normalized.get("mcp")
         if mcp is None:

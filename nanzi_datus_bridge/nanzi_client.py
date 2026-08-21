@@ -86,6 +86,8 @@ class NanziClient:
         datasource_id: str,
         trace_id: str,
         model_id: str | None = None,
+        thinking_enable: bool | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         path = f"/api/internal/datus/v1/projects/{project_id}/config"
         headers = {
@@ -99,6 +101,12 @@ class NanziClient:
         }
         if model_id is not None:
             headers["X-Nanzi-Model-Id"] = model_id
+        if thinking_enable is not None:
+            headers["X-Nanzi-Thinking-Enable"] = (
+                "true" if thinking_enable else "false"
+            )
+        if reasoning_effort is not None:
+            headers["X-Nanzi-Reasoning-Effort"] = reasoning_effort
         try:
             async with httpx.AsyncClient(
                 timeout=self._timeout,

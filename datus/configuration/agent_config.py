@@ -3216,6 +3216,7 @@ def load_model_config(data: dict) -> ModelConfig:
         model=resolve_env(data["model"]),
         save_llm_trace=data.get("save_llm_trace", False),
         enable_thinking=data.get("enable_thinking", False),
+        reasoning_effort=data.get("reasoning_effort"),
         strict_json_schema=data.get("strict_json_schema", True),
         default_headers=data.get("default_headers"),
         max_retry=int(max_retry) if max_retry is not None else 3,

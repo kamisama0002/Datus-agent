@@ -34,6 +34,8 @@ async def test_calls_exact_internal_project_config_contract() -> None:
         datasource_id="17",
         trace_id="trace-29",
         model_id="deepseek/deepseek-chat",
+        thinking_enable=True,
+        reasoning_effort="xhigh",
     )
 
     assert body == project_config()
@@ -50,6 +52,8 @@ async def test_calls_exact_internal_project_config_contract() -> None:
     assert seen_request.headers["X-Nanzi-Agent-Id"] == "agent-17"
     assert seen_request.headers["X-Nanzi-Datasource-Id"] == "17"
     assert seen_request.headers["X-Nanzi-Model-Id"] == "deepseek/deepseek-chat"
+    assert seen_request.headers["X-Nanzi-Thinking-Enable"] == "true"
+    assert seen_request.headers["X-Nanzi-Reasoning-Effort"] == "xhigh"
 
 
 @pytest.mark.anyio
