@@ -98,6 +98,57 @@ def _make_node(agent_config=None, context_length=_UNSET, **overrides):
     return node
 
 
+class TestOrchestratorVisualizationPolicy:
+    @staticmethod
+    def _tool(name: str) -> SimpleNamespace:
+        return SimpleNamespace(name=name)
+
+    def test_disallowed_turn_filters_only_render_tools_without_mutating_node_tools(self):
+        tools = [
+            self._tool("mcp__nanzi_mcp__flint_chart__render_chart"),
+            self._tool("read_query"),
+            self._tool("describe_chart_metadata"),
+        ]
+        user_input = SimpleNamespace(
+            orchestrator_context={
+                "version": "nanzi-context/v1",
+                "response_policy": {"allow_visualization": False},
+            }
+        )
+
+        filtered = AgenticNode._tools_for_orchestrator_policy(user_input, tools)
+
+        assert [tool.name for tool in filtered] == ["read_query", "describe_chart_metadata"]
+        assert [tool.name for tool in tools] == [
+            "mcp__nanzi_mcp__flint_chart__render_chart",
+            "read_query",
+            "describe_chart_metadata",
+        ]
+
+    def test_explicit_visualization_keeps_render_tool(self):
+        tools = [self._tool("render_chart"), self._tool("read_query")]
+        user_input = SimpleNamespace(
+            orchestrator_context={
+                "version": "nanzi-context/v1",
+                "response_policy": {"allow_visualization": True},
+            }
+        )
+
+        filtered = AgenticNode._tools_for_orchestrator_policy(user_input, tools)
+
+        assert filtered == tools
+
+    def test_non_orchestrated_datus_turn_keeps_existing_tools(self):
+        tools = [self._tool("render_chart"), self._tool("read_query")]
+
+        filtered = AgenticNode._tools_for_orchestrator_policy(
+            SimpleNamespace(orchestrator_context=None),
+            tools,
+        )
+
+        assert filtered == tools
+
+
 # ---------------------------------------------------------------------------
 # TestExecute
 # ---------------------------------------------------------------------------

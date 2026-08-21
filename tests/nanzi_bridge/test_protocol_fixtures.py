@@ -248,6 +248,7 @@ async def test_request_fixture_is_exact_provider_and_chat_dto_contract() -> None
     assert body.orchestrator_context.recall_policy.mode == "none"
     assert body.orchestrator_context.recall_policy.requires_fresh_query is True
     assert body.orchestrator_context.response_policy.mode == "concise"
+    assert body.orchestrator_context.response_policy.allow_visualization is False
     assert body.orchestrator_context.compression.source_tokens == 120
     assert context.project_id == runtime_project_id(
         "deepseek-v4-pro",

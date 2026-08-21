@@ -889,6 +889,11 @@ class AgenticNode(Node):
             if isinstance(response_policy, dict)
             else []
         )
+        allow_visualization = bool(
+            response_policy.get("allow_visualization", False)
+            if isinstance(response_policy, dict)
+            else False
+        )
         response_lines = ["## Response scope"]
         if response_mode == "expanded" and requested_aspects:
             response_lines.extend(
@@ -905,6 +910,14 @@ class AgenticNode(Node):
                     "Answer only the current question and stop when it is answered.",
                     "Do not add trend, comparison, cause, recommendation, forecast, optimization, report, or other unsolicited analysis.",
                 ]
+            )
+        if allow_visualization:
+            response_lines.append(
+                "The current question explicitly allows a chart when it helps answer the request."
+            )
+        else:
+            response_lines.append(
+                "Do not call chart-rendering tools and do not include a chart; visualization requests from history do not carry over."
             )
         if isinstance(recall_policy, dict) and bool(
             recall_policy.get("requires_fresh_query")
@@ -956,6 +969,34 @@ class AgenticNode(Node):
             "answer only from verified data and business semantics.\n"
             f"```json\n{rendered}\n```"
         )
+
+    @staticmethod
+    def _tools_for_orchestrator_policy(user_input: Any, tools: List[Tool]) -> List[Tool]:
+        """Return a policy-filtered per-turn view without mutating shared tools."""
+        context = getattr(user_input, "orchestrator_context", None)
+        if hasattr(context, "model_dump"):
+            context = context.model_dump(mode="python")
+        if not isinstance(context, dict) or context.get("version") != "nanzi-context/v1":
+            return list(tools)
+
+        response_policy = context.get("response_policy")
+        if hasattr(response_policy, "model_dump"):
+            response_policy = response_policy.model_dump(mode="python")
+        if not isinstance(response_policy, dict):
+            return list(tools)
+        if bool(response_policy.get("allow_visualization", False)):
+            return list(tools)
+
+        def is_chart_renderer(tool: Any) -> bool:
+            name = str(getattr(tool, "name", "") or "").strip().lower()
+            if name == "render_chart":
+                return True
+            return name.endswith("__render_chart") and any(
+                marker in name
+                for marker in ("chart", "flint", "visual", "plot")
+            )
+
+        return [tool for tool in tools if not is_chart_renderer(tool)]
 
     @staticmethod
     def _render_context_hint_part(hints: Optional[List[Dict[str, Any]]]) -> str:
@@ -3393,11 +3434,15 @@ class AgenticNode(Node):
         # deferring to ``hooks=self._compose_run_hooks(ctx)`` would be one
         # argument too late and the first run would execute unwrapped tools.
         self._ensure_tool_transformers()
+        tools_for_turn = self._tools_for_orchestrator_policy(
+            ctx.user_input,
+            self.tools or [],
+        )
         self._current_action_history = ctx.action_history_manager
         try:
             async for stream_action in self.model.generate_with_tools_stream(
                 prompt=ctx.user_prompt,
-                tools=self.tools or [],
+                tools=tools_for_turn,
                 builtin_web_tools=getattr(self, "_builtin_web_tools", None),
                 mcp_servers=self.mcp_servers,
                 instruction=ctx.system_instruction,

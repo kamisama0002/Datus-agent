@@ -374,6 +374,7 @@ OrchestratorRequestedAspect = Literal[
 
 class OrchestratorResponsePolicy(BaseModel):
     mode: Literal["concise", "expanded"] = "concise"
+    allow_visualization: bool = False
     requested_aspects: List[OrchestratorRequestedAspect] = Field(
         default_factory=list,
         max_length=8,

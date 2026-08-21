@@ -46,6 +46,7 @@
         },
         "response_policy": {
           "mode": "concise",
+          "allow_visualization": false,
           "requested_aspects": []
         },
         "compression": {
